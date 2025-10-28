@@ -134,14 +134,36 @@
         <div v-else class="space-y-6">
           <!-- Basic Details -->
           <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
-            <h2
-              class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4"
-            >
-              Basic Details
-            </h2>
+            <div class="flex items-center justify-between mb-4">
+              <h2
+                class="text-lg font-semibold text-gray-800 dark:text-gray-100"
+              >
+                Basic Details
+              </h2>
+              <button
+                @click="showEditEmbellishmentModal = true"
+                class="inline-flex items-center gap-1 text-xs px-2 py-1 border rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700"
+                title="Edit embellishment details"
+              >
+                <svg
+                  class="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                  />
+                </svg>
+                Edit Details
+              </button>
+            </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div>
-                <div class="text-gray-500 dark:text-gray-400">Name</div>
+                <div class="text-gray-500 dark:text-gray-400">Plan Name</div>
                 <div class="text-gray-800 dark:text-gray-100">
                   {{ planData.basic.name || "—" }}
                 </div>
@@ -150,6 +172,22 @@
                 <div class="text-gray-500 dark:text-gray-400">Type</div>
                 <div class="text-gray-800 dark:text-gray-100">
                   {{ planData.basic.type || "—" }}
+                </div>
+              </div>
+              <div>
+                <div class="text-gray-500 dark:text-gray-400">
+                  Personnel Name
+                </div>
+                <div class="text-gray-800 dark:text-gray-100">
+                  {{ planData.embellishment.personel_name || "—" }}
+                </div>
+              </div>
+              <div>
+                <div class="text-gray-500 dark:text-gray-400">
+                  Surveyor / Supervisor
+                </div>
+                <div class="text-gray-800 dark:text-gray-100">
+                  {{ planData.embellishment.surveyor_name || "—" }}
                 </div>
               </div>
             </div>
@@ -348,31 +386,57 @@
               </div>
               <div>
                 <div class="text-gray-500 dark:text-gray-400">Beacon Size</div>
-                <div class="text-gray-800 dark:text-gray-100">{{ planData.embellishment.beacon_size ?? '—' }}</div>
+                <div class="text-gray-800 dark:text-gray-100">
+                  {{ planData.embellishment.beacon_size ?? "—" }}
+                </div>
               </div>
               <div>
                 <div class="text-gray-500 dark:text-gray-400">Label Size</div>
-                <div class="text-gray-800 dark:text-gray-100">{{ planData.embellishment.label_size ?? '—' }}</div>
+                <div class="text-gray-800 dark:text-gray-100">
+                  {{ planData.embellishment.label_size ?? "—" }}
+                </div>
               </div>
               <div>
                 <div class="text-gray-500 dark:text-gray-400">Page Size</div>
-                <div class="text-gray-800 dark:text-gray-100">{{ planData.embellishment.page_size ?? pageSize ?? '—' }}</div>
+                <div class="text-gray-800 dark:text-gray-100">
+                  {{ planData.embellishment.page_size ?? pageSize ?? "—" }}
+                </div>
               </div>
               <div>
                 <div class="text-gray-500 dark:text-gray-400">Orientation</div>
-                <div class="text-gray-800 dark:text-gray-100">{{ planData.embellishment.page_orientation ?? pageOrientation ?? '—' }}</div>
+                <div class="text-gray-800 dark:text-gray-100">
+                  {{
+                    planData.embellishment.page_orientation ??
+                    pageOrientation ??
+                    "—"
+                  }}
+                </div>
               </div>
               <div class="md:col-span-2">
                 <div class="text-gray-500 dark:text-gray-400">Footers</div>
                 <div class="text-gray-800 dark:text-gray-100">
-                  <div v-if="planData.embellishment.footers?.length" v-for="(f, i) in planData.embellishment.footers" :key="i" class="text-sm" v-html="f"></div>
-                  <div v-else-if="footers.length" v-for="(f, i) in footers" :key="`f-${i}`" class="text-sm" v-html="f"></div>
+                  <div
+                    v-if="planData.embellishment.footers?.length"
+                    v-for="(f, i) in planData.embellishment.footers"
+                    :key="i"
+                    class="text-sm"
+                    v-html="f"
+                  ></div>
+                  <div
+                    v-else-if="footers.length"
+                    v-for="(f, i) in footers"
+                    :key="`f-${i}`"
+                    class="text-sm"
+                    v-html="f"
+                  ></div>
                   <div v-else>—</div>
                 </div>
               </div>
               <div>
                 <div class="text-gray-500 dark:text-gray-400">Footer Size</div>
-                <div class="text-gray-800 dark:text-gray-100">{{ planData.embellishment.footer_size ?? footerSize ?? '—' }}</div>
+                <div class="text-gray-800 dark:text-gray-100">
+                  {{ planData.embellishment.footer_size ?? footerSize ?? "—" }}
+                </div>
               </div>
             </div>
 
@@ -456,6 +520,15 @@
     message="Are you sure you want to delete this plan? This action cannot be undone."
     @confirmed="confirmDelete"
   />
+
+  <!-- Edit Embellishment Modal -->
+  <EditEmbellishmentModal
+    v-model="showEditEmbellishmentModal"
+    :embellishment="planData.embellishment"
+    :plan-id="planId"
+    :all-plan-data="buildFullPlanPayload()"
+    @saved="refreshPlanData"
+  />
 </template>
 
 <script lang="ts" setup>
@@ -463,6 +536,7 @@ definePageMeta({ middleware: ["auth"] });
 
 import { RiArrowLeftLine, RiDeleteBinLine } from "@remixicon/vue";
 import ConfirmModal from "~/components/ConfirmModal.vue";
+import EditEmbellishmentModal from "~/components/EditEmbellishmentModal.vue";
 import { ref, reactive, onMounted, computed } from "vue";
 import { useRoute } from "vue-router";
 import { navigateTo } from "#imports";
@@ -475,6 +549,7 @@ const projectId = route.params.id as string;
 const planId = route.params.plan as string;
 const initialLoading = ref(true);
 const showDeleteModal = ref(false);
+const showEditEmbellishmentModal = ref(false);
 const showAllCoordinates = ref(false);
 
 const topographicSettings = ref<any>(null);
@@ -504,6 +579,7 @@ const planData = reactive({
     label_size: null as number | null,
     page_size: null as string | null,
     page_orientation: null as string | null,
+    dxf_version: "R2018",
     footers: [] as string[],
     footer_size: null as number | null,
     personel_name: "",
@@ -569,10 +645,14 @@ onMounted(async () => {
           page_size: emb.page_size ?? planData.embellishment.page_size,
           page_orientation:
             emb.page_orientation ?? planData.embellishment.page_orientation,
+          dxf_version: emb.dxf_version ?? planData.embellishment.dxf_version,
           footers: Array.isArray(emb.footers)
             ? [...emb.footers]
             : planData.embellishment.footers ?? footers.value,
-          footer_size: emb.footer_size ?? planData.embellishment.footer_size ?? footerSize.value,
+          footer_size:
+            emb.footer_size ??
+            planData.embellishment.footer_size ??
+            footerSize.value,
           personel_name:
             emb.personel_name ?? planData.embellishment.personel_name,
           surveyor_name:
@@ -693,6 +773,60 @@ async function generatePlan() {
     });
   } finally {
     generationState.loading = false;
+  }
+}
+
+// Build complete plan payload to pass to the modal
+function buildFullPlanPayload() {
+  return {
+    // Embellishment fields
+    name: planData.embellishment.name,
+    font: planData.embellishment.font,
+    font_size: Number(planData.embellishment.font_size ?? 1),
+    title: planData.embellishment.title,
+    address: planData.embellishment.address,
+    local_govt: planData.embellishment.local_govt,
+    state: planData.embellishment.state,
+    plan_number: planData.embellishment.plan_number,
+    origin: planData.embellishment.origin,
+    scale: Number(planData.embellishment.scale ?? 1),
+    beacon_type: planData.embellishment.beacon_type,
+    beacon_size: Number(planData.embellishment.beacon_size ?? 0.75),
+    label_size: Number(planData.embellishment.label_size ?? 0.25),
+    personel_name: planData.embellishment.personel_name,
+    surveyor_name: planData.embellishment.surveyor_name,
+    page_size: planData.embellishment.page_size ?? "A4",
+    page_orientation: planData.embellishment.page_orientation ?? "portrait",
+    dxf_version: planData.embellishment.dxf_version ?? "R2018",
+    footers: Array.isArray(planData.embellishment.footers)
+      ? planData.embellishment.footers
+      : [],
+    footer_size: Number(planData.embellishment.footer_size ?? 1),
+  };
+}
+
+// Refresh plan data after edit
+async function refreshPlanData() {
+  try {
+    const res = await axios.get(`/plan/fetch/${planId}`);
+    const data = res?.data?.data;
+    if (data) {
+      // Update embellishment fields
+      const emb: any = data;
+      if (emb) {
+        planData.embellishment = {
+          ...planData.embellishment,
+          name: emb.name ?? planData.embellishment.name,
+          personel_name:
+            emb.personel_name ?? planData.embellishment.personel_name,
+          surveyor_name:
+            emb.surveyor_name ?? planData.embellishment.surveyor_name,
+        };
+      }
+    }
+    toast.add({ title: "Plan details refreshed", color: "success" });
+  } catch (error) {
+    console.error("Failed to refresh plan data:", error);
   }
 }
 </script>
