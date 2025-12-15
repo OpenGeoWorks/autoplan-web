@@ -316,6 +316,14 @@
             <span v-if="isComputing" class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
             {{ isComputing ? "Computing..." : "Compute Traverse" }}
           </button>
+
+          <button
+            v-if="computationResults"
+            @click="showSaveModal = true"
+            class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+          >
+            Save Computation
+          </button>
         </div>
 
         <!-- Error Section -->
@@ -334,11 +342,25 @@
     </div>
   </div>
 
+  <!-- Save Computation Modal -->
+  <SaveComputationModal
+    v-model="showSaveModal"
+    ref="saveModalRef"
+    @save="saveComputation"
+  />
+
   <!-- Results Modal -->
   <TraverseComputationResultsModal
     :show="showResultsModal"
     :results="computationResults?.data || null"
     @close="closeModal"
+  />
+
+  <!-- Save Computation Modal -->
+  <SaveComputationModal
+    v-model="showSaveModal"
+    @save="saveComputation"
+    ref="saveModalRef"
   />
 </template>
 
@@ -348,6 +370,7 @@ import { useRoute } from "vue-router";
 import { navigateTo } from "#imports";
 import { ref, computed } from "vue";
 import TraverseComputationResultsModal from "~/components/TraverseComputationResultsModal.vue";
+import SaveComputationModal from "~/components/SaveComputationModal.vue";
 import { parseTable } from "~/composables/useSheetParser";
 
 definePageMeta({ middleware: ["auth"] });
@@ -377,12 +400,13 @@ const legs = ref([
     distance: 0,
   },
 ]);
-
 const misclosureCorrection = ref(true);
 const computationResults = ref<any>(null);
 const computationError = ref("");
 const showResultsModal = ref(false);
 const isComputing = ref(false);
+const showSaveModal = ref(false);
+const saveModalRef = ref<any>(null);
 const angleFileInputRef = ref<HTMLInputElement | null>(null);
 
 // Computed properties
@@ -642,5 +666,56 @@ const downloadAngleTemplate = () => {
   a.download = "observed_angle_distance_template.csv";
   a.click();
   URL.revokeObjectURL(url);
+};
+
+const saveComputation = async (name: string) => {
+  if (!saveModalRef.value) return;
+
+  try {
+    saveModalRef.value.setLoading(true);
+    saveModalRef.value.setError("");
+
+    // Step 1: Create a computation-only plan
+    const { $axios } = useNuxtApp();
+    const planResponse = await $axios.post("/plan/create", {
+      name,
+      project: projectId,
+      computation_only: true,
+    });
+
+    const planId = planResponse.data?.data?.id;
+    if (!planId) {
+      throw new Error("Failed to create computation plan");
+    }
+
+    // Step 2: Save traverse data
+    const traverseData = {
+      coordinates: coordinates.value,
+      legs: legs.value,
+      apply_misclosure_correction: misclosureCorrection.value,
+    };
+
+    await $axios.put(`/plan/traverse-data/edit/${planId}`, traverseData);
+
+    saveModalRef.value.close();
+    toast.add({
+      title: "Computation saved successfully",
+      color: "success",
+    });
+
+    // Navigate to the saved computation
+    setTimeout(() => {
+      navigateTo(`/project/${projectId}/plan/${planId}`);
+    }, 500);
+  } catch (error: any) {
+    console.error("Save computation error:", error);
+    const errorMessage =
+      error.response?.data?.message ||
+      error.message ||
+      "Failed to save computation";
+    saveModalRef.value.setError(errorMessage);
+  } finally {
+    saveModalRef.value.setLoading(false);
+  }
 };
 </script>

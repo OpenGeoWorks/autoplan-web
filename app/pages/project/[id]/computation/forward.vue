@@ -271,6 +271,14 @@
 
           <button
             v-if="computationResults"
+            @click="showSaveModal = true"
+            class="px-6 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+          >
+            Save Computation
+          </button>
+
+          <button
+            v-if="computationResults"
             @click="downloadComputationCSV"
             class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
           >
@@ -374,6 +382,13 @@
       </div>
     </div>
   </div>
+
+  <!-- Save Computation Modal -->
+  <SaveComputationModal
+    v-model="showSaveModal"
+    ref="saveModalRef"
+    @save="saveComputation"
+  />
 </template>
 
 <script lang="ts" setup>
@@ -411,6 +426,8 @@ const computationResults = ref<any>(null);
 const computationError = ref("");
 const isComputing = ref(false);
 const forwardFileInputRef = ref<HTMLInputElement | null>(null);
+const showSaveModal = ref(false);
+const saveModalRef = ref<any>(null);
 
 // Computed properties
 const canCompute = computed(() => {
@@ -827,5 +844,171 @@ const downloadComputationCSV = () => {
     title: "Computation data downloaded successfully",
     color: "success",
   });
+};
+
+const saveComputation = async (computationName: string) => {
+  if (!saveModalRef.value) return;
+
+  try {
+    saveModalRef.value.setLoading(true);
+
+    // Step 1: Create the computation plan
+    const { $axios } = useNuxtApp();
+    const planResponse = await $axios.post("/plan/create", {
+      name: computationName,
+      project: projectId,
+      computation_only: true,
+    });
+
+    const planId = planResponse.data?.data?.id;
+    if (!planId) {
+      throw new Error("Failed to create computation plan");
+    }
+
+    // Step 2: Save the forward computation data
+    // Find the first row with known coordinates (start point)
+    const startRow = forwardRows.value.find(
+      (row) =>
+        row.easting !== null &&
+        row.northing !== null &&
+        row.pointId &&
+        row.pointId.trim() !== ""
+    );
+
+    if (!startRow) {
+      throw new Error("No starting point with coordinates found");
+    }
+
+    const startPointIndex = forwardRows.value.indexOf(startRow);
+
+    // Build coordinates array
+    const coordinates: { id: string; northing: number; easting: number }[] = [];
+    forwardRows.value.forEach((row) => {
+      if (
+        row.pointId &&
+        row.pointId.trim() !== "" &&
+        row.easting !== null &&
+        row.northing !== null
+      ) {
+        const existingCoord = coordinates.find((c) => c.id === row.pointId);
+        if (!existingCoord) {
+          coordinates.push({
+            id: row.pointId,
+            northing: row.northing,
+            easting: row.easting,
+          });
+        }
+      }
+    });
+
+    // Build legs array
+    const legs: any[] = [];
+    const processedRows = new Set<number>();
+
+    for (let i = startPointIndex + 1; i < forwardRows.value.length; i++) {
+      const row = forwardRows.value[i];
+      if (
+        !row ||
+        !row.pointId ||
+        row.pointId.trim() === "" ||
+        row.distance === null ||
+        row.distance <= 0
+      )
+        continue;
+
+      if (processedRows.has(i)) continue;
+
+      let fromId = startRow.pointId;
+      for (let j = i - 1; j >= 0; j--) {
+        const prevRow = forwardRows.value[j];
+        if (prevRow && prevRow.pointId && prevRow.pointId.trim() !== "") {
+          fromId = prevRow.pointId;
+          break;
+        }
+      }
+
+      if (fromId) {
+        legs.push({
+          from: { id: fromId },
+          to: { id: row.pointId },
+          bearing: {
+            degrees: row.degrees ?? 0,
+            minutes: row.minutes ?? 0,
+            seconds: row.seconds ?? 0,
+          },
+          distance: row.distance,
+        });
+
+        processedRows.add(i);
+      }
+    }
+
+    // Handle closing leg
+    const closingRowIndex = forwardRows.value.findIndex(
+      (row, index) =>
+        row.pointId === startRow.pointId &&
+        index !== startPointIndex &&
+        row.distance !== null &&
+        row.distance > 0
+    );
+
+    if (closingRowIndex !== -1 && !processedRows.has(closingRowIndex)) {
+      const closingRow = forwardRows.value[closingRowIndex];
+      if (closingRow) {
+        let lastPointId = startRow.pointId;
+        for (let i = closingRowIndex - 1; i >= 0; i--) {
+          const row = forwardRows.value[i];
+          if (row && row.pointId && row.pointId !== startRow.pointId) {
+            lastPointId = row.pointId;
+            break;
+          }
+        }
+
+        legs.push({
+          from: { id: lastPointId },
+          to: { id: startRow.pointId },
+          bearing: {
+            degrees: closingRow.degrees ?? 0,
+            minutes: closingRow.minutes ?? 0,
+            seconds: closingRow.seconds ?? 0,
+          },
+          distance: closingRow.distance,
+        });
+      }
+    }
+
+    const forwardData = {
+      coordinates,
+      start: {
+        id: startRow.pointId,
+        northing: startRow.northing,
+        easting: startRow.easting,
+      },
+      legs,
+      misclosure_correction: misclosureCorrection.value,
+    };
+
+    await $axios.put(`/plan/forward-data/edit/${planId}`, forwardData);
+
+    saveModalRef.value.close();
+    toast.add({
+      title: "Computation saved successfully",
+      color: "success",
+    });
+
+    // Navigate to the saved computation
+    setTimeout(() => {
+      navigateTo(`/project/${projectId}/plan/${planId}`);
+    }, 500);
+  } catch (error: any) {
+    console.error("Save computation error:", error);
+    const errorMessage =
+      error.response?.data?.message ||
+      error.message ||
+      "Failed to save computation";
+    saveModalRef.value.setError(errorMessage);
+  } finally {
+    saveModalRef.value.setLoading(false);
+  }
 };
 </script>
