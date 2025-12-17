@@ -12,54 +12,135 @@
           >
             <RiArrowLeftLine class="w-4 h-4" /> Back to Project
           </button>
-          <div class="ml-auto flex items-center gap-2">
-            <button
-              @click="generatePlan"
-              :disabled="generationState.loading"
-              class="inline-flex items-center px-3 py-2 text-sm rounded-md border border-green-200 text-green-600 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <svg
-                v-if="generationState.loading"
-                class="animate-spin w-4 h-4 mr-1"
-                fill="none"
-                viewBox="0 0 24 24"
+          <div class="ml-auto flex items-center gap-2" v-if="!initialLoading">
+            <!-- Computation Only Actions -->
+            <template v-if="isComputationOnly">
+              <button
+                v-if="computationType"
+                @click="
+                  navigateTo(
+                    `/project/${projectId}/plan/${planId}/${
+                      computationType === 'forward'
+                        ? 'forward-computation'
+                        : computationType === 'traverse'
+                        ? 'traverse-computation'
+                        : 'differential-leveling'
+                    }`
+                  )
+                "
+                class="inline-flex items-center px-3 py-2 text-sm rounded-md border border-blue-200 text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/20"
               >
-                <circle
-                  class="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
+                <svg
+                  class="w-4 h-4 mr-1"
+                  fill="none"
                   stroke="currentColor"
-                  stroke-width="4"
-                ></circle>
-                <path
-                  class="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
-              </svg>
-              <svg
-                v-else
-                class="w-4 h-4 mr-1"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                  />
+                </svg>
+                Edit Computation
+              </button>
+              <button
+                @click="showConvertModal = true"
+                :disabled="conversionState.loading"
+                class="inline-flex items-center px-3 py-2 text-sm rounded-md border border-green-200 text-green-600 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-              {{ generationState.loading ? "Generating..." : "Download Plan" }}
-            </button>
+                <svg
+                  v-if="conversionState.loading"
+                  class="animate-spin w-4 h-4 mr-1"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="4"
+                  ></circle>
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+                <svg
+                  v-else
+                  class="w-4 h-4 mr-1"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                {{
+                  conversionState.loading ? "Converting..." : "Convert to Plan"
+                }}
+              </button>
+            </template>
+            <!-- Regular Plan Actions -->
+            <template v-else>
+              <button
+                @click="generatePlan"
+                :disabled="generationState.loading"
+                class="inline-flex items-center px-3 py-2 text-sm rounded-md border border-green-200 text-green-600 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <svg
+                  v-if="generationState.loading"
+                  class="animate-spin w-4 h-4 mr-1"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="4"
+                  ></circle>
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+                <svg
+                  v-else
+                  class="w-4 h-4 mr-1"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+                {{
+                  generationState.loading ? "Generating..." : "Download Plan"
+                }}
+              </button>
+            </template>
           </div>
         </div>
 
         <div class="flex items-center justify-between mb-6">
           <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">
-            Plan Details
+            {{ isComputationOnly ? "Computation Details" : "Plan Details" }}
             <span
               v-if="planData.basic.name"
               class="ml-2 text-2xl font-semibold text-gray-600 dark:text-gray-300"
@@ -67,8 +148,9 @@
               — {{ planData.basic.name }}
             </span>
           </h1>
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2" v-if="!initialLoading">
             <button
+              v-if="!isComputationOnly"
               @click="navigateTo(`/project/${projectId}/plan/${planId}/edit`)"
               class="p-2 text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md transition-colors"
               title="Edit Plan"
@@ -90,7 +172,7 @@
             <button
               @click="showDeleteModal = true"
               class="p-2 text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md transition-colors"
-              title="Delete Plan"
+              :title="isComputationOnly ? 'Delete Computation' : 'Delete Plan'"
             >
               <RiDeleteBinLine class="w-5 h-5" />
             </button>
@@ -141,6 +223,7 @@
                 Basic Details
               </h2>
               <button
+                v-if="!isComputationOnly"
                 @click="showEditEmbellishmentModal = true"
                 class="inline-flex items-center gap-1 text-xs px-2 py-1 border rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700"
                 title="Edit embellishment details"
@@ -163,18 +246,20 @@
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div>
-                <div class="text-gray-500 dark:text-gray-400">Plan Name</div>
+                <div class="text-gray-500 dark:text-gray-400">
+                  {{ isComputationOnly ? "Computation Name" : "Plan Name" }}
+                </div>
                 <div class="text-gray-800 dark:text-gray-100">
                   {{ planData.basic.name || "—" }}
                 </div>
               </div>
-              <div>
+              <div v-if="!isComputationOnly">
                 <div class="text-gray-500 dark:text-gray-400">Type</div>
                 <div class="text-gray-800 dark:text-gray-100">
                   {{ planData.basic.type || "—" }}
                 </div>
               </div>
-              <div>
+              <div v-if="!isComputationOnly">
                 <div class="text-gray-500 dark:text-gray-400">
                   Personnel Name
                 </div>
@@ -182,7 +267,7 @@
                   {{ planData.embellishment.personel_name || "—" }}
                 </div>
               </div>
-              <div>
+              <div v-if="!isComputationOnly">
                 <div class="text-gray-500 dark:text-gray-400">
                   Surveyor / Supervisor
                 </div>
@@ -194,7 +279,10 @@
           </div>
 
           <!-- Coordinates -->
-          <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
+          <div
+            v-if="!isComputationOnly"
+            class="bg-white dark:bg-slate-800 rounded-lg shadow p-6"
+          >
             <div class="flex items-center mb-4">
               <h2
                 class="text-lg font-semibold text-gray-800 dark:text-gray-100"
@@ -262,7 +350,7 @@
 
           <!-- Parcels -->
           <div
-            v-if="planData.parcels.length"
+            v-if="!isComputationOnly && planData.parcels.length"
             class="bg-white dark:bg-slate-800 rounded-lg shadow p-6"
           >
             <div class="flex items-center mb-4">
@@ -298,7 +386,10 @@
           </div>
 
           <!-- Embellishment -->
-          <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
+          <div
+            v-if="!isComputationOnly"
+            class="bg-white dark:bg-slate-800 rounded-lg shadow p-6"
+          >
             <h2
               class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4"
             >
@@ -513,11 +604,15 @@
     </div>
   </div>
 
-  <!-- Delete Plan Confirmation Modal -->
+  <!-- Delete Confirmation Modal -->
   <ConfirmModal
     v-model="showDeleteModal"
-    title="Delete Plan"
-    message="Are you sure you want to delete this plan? This action cannot be undone."
+    :title="isComputationOnly ? 'Delete Computation' : 'Delete Plan'"
+    :message="
+      isComputationOnly
+        ? 'Are you sure you want to delete this computation? This action cannot be undone.'
+        : 'Are you sure you want to delete this plan? This action cannot be undone.'
+    "
     @confirmed="confirmDelete"
   />
 
@@ -529,6 +624,13 @@
     :all-plan-data="buildFullPlanPayload()"
     @saved="refreshPlanData"
   />
+
+  <!-- Convert to Plan Modal -->
+  <ConvertToPlanModal
+    v-model="showConvertModal"
+    :loading="conversionState.loading"
+    @convert="handleConvertToPlan"
+  />
 </template>
 
 <script lang="ts" setup>
@@ -537,6 +639,7 @@ definePageMeta({ middleware: ["auth"] });
 import { RiArrowLeftLine, RiDeleteBinLine } from "@remixicon/vue";
 import ConfirmModal from "~/components/ConfirmModal.vue";
 import EditEmbellishmentModal from "~/components/EditEmbellishmentModal.vue";
+import ConvertToPlanModal from "~/components/ConvertToPlanModal.vue";
 import { ref, reactive, onMounted, computed } from "vue";
 import { useRoute } from "vue-router";
 import { navigateTo } from "#imports";
@@ -551,12 +654,16 @@ const initialLoading = ref(true);
 const showDeleteModal = ref(false);
 const showEditEmbellishmentModal = ref(false);
 const showAllCoordinates = ref(false);
+const showConvertModal = ref(false);
 
 const topographicSettings = ref<any>(null);
 const pageSize = ref<string | null>(null);
 const pageOrientation = ref<string | null>(null);
 const footers = ref<string[]>([]);
 const footerSize = ref<number | null>(null);
+const isComputationOnly = ref(false);
+const computationType = ref<string | null>(null);
+const computationData = ref<any>(null);
 
 const planData = reactive({
   basic: { name: "", type: "" },
@@ -595,14 +702,39 @@ const generationState = reactive({
   error: null as string | null,
 });
 
-onMounted(async () => {
+// Conversion state
+const conversionState = reactive({
+  loading: false,
+  error: null as string | null,
+});
+
+// Fetch and load plan data
+async function fetchPlanData() {
   try {
+    initialLoading.value = true;
     const res = await axios.get(`/plan/fetch/${planId}`);
     const data = res?.data?.data;
     if (data) {
+      // Check if computation only
+      isComputationOnly.value = data.computation_only === true;
+
       // Basic
       planData.basic.name = data.name || "";
       planData.basic.type = data.type || "";
+
+      // If computation only, determine the computation type and store data
+      if (isComputationOnly.value) {
+        if (data.forward_computation_data) {
+          computationType.value = "forward";
+          computationData.value = data.forward_computation_data;
+        } else if (data.traverse_computation_data) {
+          computationType.value = "traverse";
+          computationData.value = data.traverse_computation_data;
+        } else if (data.differential_leveling_data) {
+          computationType.value = "differential-leveling";
+          computationData.value = data.differential_leveling_data;
+        }
+      }
 
       // Coordinates
       if (Array.isArray(data.coordinates)) {
@@ -659,17 +791,21 @@ onMounted(async () => {
             emb.surveyor_name ?? planData.embellishment.surveyor_name,
         };
       }
-    }
 
-    // Topographic settings and page/footer info may be at root of response
-    if (data?.topographic_setting) {
-      topographicSettings.value = data.topographic_setting;
+      // Topographic settings and page/footer info may be at root of response
+      if (data?.topographic_setting) {
+        topographicSettings.value = data.topographic_setting;
+      }
     }
   } catch (error) {
     toast?.add?.({ title: "Failed to load plan", color: "error" });
   } finally {
     initialLoading.value = false;
   }
+}
+
+onMounted(() => {
+  fetchPlanData();
 });
 
 const visibleCoordinates = computed(() => {
@@ -722,12 +858,64 @@ function formatOrigin(origin: string | null | undefined) {
 async function confirmDelete() {
   try {
     await axios.delete(`/plan/delete/${planId}`);
-    toast.add({ title: "Plan deleted successfully", color: "success" });
+    toast.add({
+      title: isComputationOnly.value
+        ? "Computation deleted successfully"
+        : "Plan deleted successfully",
+      color: "success",
+    });
     navigateTo(`/project/${projectId}`);
   } catch (error) {
-    toast.add({ title: "Failed to delete plan", color: "error" });
+    toast.add({
+      title: isComputationOnly.value
+        ? "Failed to delete computation"
+        : "Failed to delete plan",
+      color: "error",
+    });
   }
   showDeleteModal.value = false;
+}
+
+async function handleConvertToPlan(planType: string) {
+  if (conversionState.loading) return;
+
+  try {
+    conversionState.loading = true;
+    conversionState.error = null;
+
+    const response = await axios.post(`/plan/computation/convert/${planId}`, {
+      type: planType,
+    });
+
+    if (response.data?.error === false) {
+      toast?.add?.({
+        title: "Converted to plan successfully!",
+        description: "You can now edit and generate the full plan.",
+        color: "success",
+      });
+
+      showConvertModal.value = false;
+
+      // Fetch the updated plan data to refresh the view
+      await fetchPlanData();
+    } else {
+      throw new Error("Invalid response format");
+    }
+  } catch (error: any) {
+    console.error("Plan conversion error:", error);
+    const errorMessage =
+      error.response?.data?.message ||
+      error.message ||
+      "Failed to convert to plan";
+    conversionState.error = errorMessage;
+    toast?.add?.({
+      title: "Conversion failed",
+      description: errorMessage,
+      color: "error",
+    });
+  } finally {
+    conversionState.loading = false;
+  }
 }
 
 async function generatePlan() {
