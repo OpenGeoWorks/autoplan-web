@@ -6,11 +6,11 @@
       <!-- Back -->
       <div class="mb-4">
         <button
-          @click="navigateTo(`/project/${projectId}/plan/${planId}/edit`)"
+          @click="navigateTo(isComputationOnly ? `/project/${projectId}/plan/${planId}` : `/project/${projectId}/plan/${planId}/edit`)"
           class="inline-flex items-center gap-2 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100"
         >
           <RiArrowLeftLine class="w-4 h-4" />
-          Back to Plan Edit
+          {{ isComputationOnly ? 'Back to Details' : 'Back to Plan Edit' }}
         </button>
       </div>
 
@@ -527,6 +527,7 @@ const toast = useToast();
 const route = useRoute();
 const projectId = route.params.id as string;
 const planId = route.params.plan as string;
+const isComputationOnly = ref(false);
 
 // Reactive data
 const levelingMethod = ref<"height-of-instrument" | "rise-and-fall">(
@@ -585,6 +586,11 @@ const fetchPlanData = async () => {
     isLoading.value = true;
     const { $axios } = useNuxtApp();
     const response = await $axios.get(`/plan/fetch/${planId}`);
+
+    // Check if computation only
+    if (response.data?.data?.computation_only === true) {
+      isComputationOnly.value = true;
+    }
 
     if (response.data?.data?.differential_leveling_data) {
       const levelingData = response.data.data.differential_leveling_data;
