@@ -78,6 +78,7 @@ async function completeBasic() {
       name: planData.basic.name,
       type: planData.basic.type,
       project: projectId,
+      computation_only: false,
     };
     const res = await axios.post(`/plan/create`, payload);
     const created = res?.data?.data;
