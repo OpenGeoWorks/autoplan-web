@@ -148,27 +148,43 @@ const allParcels = computed(() => {
     return [];
   }
 
+  // Look up coordinates by point id so each parcel can be walked in the
+  // order the user arranged its points.
+  const coordMap = new Map<string, any>();
+  for (const r of props.coordinates) {
+    if (r.point && r.northing != null && r.easting != null) {
+      coordMap.set(r.point, r);
+    }
+  }
+
   return props.parcels
     .map((parcel) => {
       const parcelName = (parcel?.name || "").trim();
       const parcelIds = parcel?.ids?.filter(Boolean) || [];
       if (!parcelIds.length) return null;
 
-      // Filter coordinates for this parcel
-      const set = new Set(parcelIds);
-      const filtered =
-        props.coordinates?.filter((r) => r.point && set.has(r.point)) || [];
-      if (!filtered.length) return null;
+      // The polygon must follow the parcel's traverse order, not the
+      // coordinate-table order.
+      const orderedIds = [...parcelIds];
+      if (
+        orderedIds.length > 1 &&
+        orderedIds[0] === orderedIds[orderedIds.length - 1]
+      ) {
+        orderedIds.pop(); // polygon closes itself; drop the explicit closing id
+      }
 
-      // Map to raw points
-      const points = filtered
-        .filter((r) => r.northing != null && r.easting != null)
-        .map((r) => ({
-          key: r.point || `${r.easting},${r.northing}`,
-          label: r.point || "",
-          x: Number(r.easting),
-          y: Number(r.northing),
-        }));
+      const points = orderedIds
+        .map((id, i) => {
+          const r = coordMap.get(id);
+          if (!r) return null;
+          return {
+            key: `${id}-${i}`,
+            label: id,
+            x: Number(r.easting),
+            y: Number(r.northing),
+          };
+        })
+        .filter((p): p is { key: string; label: string; x: number; y: number } => !!p);
 
       if (!points.length) return null;
 

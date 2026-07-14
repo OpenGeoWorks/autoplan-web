@@ -58,24 +58,38 @@
               />
             </td>
             <td
-              v-for="(n, cIdx) in maxColumns"
-              :key="`r-${idx}-c-${n}`"
+              v-for="(id, cIdx) in parcel.ids"
+              :key="`r-${idx}-c-${cIdx}`"
               class="px-3 py-1"
             >
-              <select
-                v-model="parcel.ids[cIdx]"
-                class="w-28 px-2 py-1 text-xs rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:outline-none"
-              >
-                <option :value="''">--</option>
-                <option
-                  v-for="opt in optionsFor(idx, cIdx, parcel.ids[cIdx] || '')"
-                  :key="opt"
-                  :value="opt"
+              <div class="flex items-center gap-1">
+                <select
+                  v-model="parcel.ids[cIdx]"
+                  class="w-28 px-2 py-1 text-xs rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:outline-none"
                 >
-                  {{ opt }}
-                </option>
-              </select>
+                  <option :value="''">--</option>
+                  <option
+                    v-for="opt in optionsFor(idx, cIdx, parcel.ids[cIdx] || '')"
+                    :key="opt"
+                    :value="opt"
+                  >
+                    {{ opt }}
+                  </option>
+                </select>
+                <button
+                  v-if="parcel.ids.length > 1"
+                  @click="removePoint(parcel, cIdx)"
+                  class="text-red-500 hover:text-red-700 text-xs leading-none"
+                  title="Remove this point"
+                >
+                  ✕
+                </button>
+              </div>
             </td>
+            <td
+              v-if="parcel.ids.length < maxColumns"
+              :colspan="maxColumns - parcel.ids.length"
+            ></td>
             <td class="px-3 py-1 text-right space-x-2 flex">
               <button
                 @click="addIdSlot(parcel)"
@@ -194,6 +208,9 @@ function removeRow(idx: number) {
 }
 function addIdSlot(parcel: ParcelRow) {
   parcel.ids.push("");
+}
+function removePoint(parcel: ParcelRow, idx: number) {
+  if (parcel.ids.length > 1) parcel.ids.splice(idx, 1);
 }
 
 function addAllPoints() {

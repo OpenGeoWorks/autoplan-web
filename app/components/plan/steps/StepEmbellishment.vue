@@ -14,7 +14,7 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label
-            class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+            class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
             >File / Template Name</label
           >
           <input
@@ -26,7 +26,7 @@
         </div>
         <div>
           <label
-            class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+            class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
             >Personnel Name</label
           >
           <input
@@ -38,7 +38,7 @@
         </div>
         <div>
           <label
-            class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+            class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
             >Surveyor / Supervisor</label
           >
           <input
@@ -62,7 +62,7 @@
       <div class="space-y-4">
         <div>
           <label
-            class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+            class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
             >Title</label
           >
           <ClientOnly>
@@ -86,7 +86,7 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label
-            class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+            class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
             >Address</label
           >
           <input
@@ -98,7 +98,7 @@
         </div>
         <div>
           <label
-            class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+            class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
             >Local Govt</label
           >
           <input
@@ -110,7 +110,7 @@
         </div>
         <div>
           <label
-            class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+            class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
             >State</label
           >
           <input
@@ -122,8 +122,9 @@
         </div>
         <div>
           <label
-            class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-            >Plan Number</label
+            class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
+            >Plan Number
+            <InfoTip text="Official plan registration number issued for the survey (e.g. LS/D/2026/0142). Printed on the plan face." /></label
           >
           <input
             v-model="local.embellishment.plan_number"
@@ -134,8 +135,9 @@
         </div>
         <div>
           <label
-            class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-            >Origin</label
+            class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
+            >Origin
+            <InfoTip text="Coordinate system the survey is referenced to. All Lagos-area plans use U.T.M. Zone 31." /></label
           >
           <select
             v-model="local.embellishment.origin"
@@ -157,7 +159,7 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <div>
           <label
-            class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+            class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
             >Font</label
           >
           <select
@@ -173,8 +175,9 @@
         </div>
         <div>
           <label
-            class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-            >Title Size</label
+            class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
+            >Title Size
+            <InfoTip text="Text height of the plan title, in metres on the ground. Computed automatically from your drawing's size — only adjust if the title looks too big or small." /></label
           >
           <input
             v-model.number="local.embellishment.font_size"
@@ -185,8 +188,9 @@
         </div>
         <div>
           <label
-            class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-            >Scale</label
+            class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
+            >Scale
+            <InfoTip text="Plan scale — 1:1000 means 1 cm on paper is 10 m on the ground. Larger denominators fit bigger sites on the page with less detail." /></label
           >
           <select
             name="scale"
@@ -202,8 +206,9 @@
         </div>
         <div>
           <label
-            class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-            >Beacon Size</label
+            class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
+            >Beacon Size
+            <InfoTip text="Size of the beacon symbols drawn at survey pillars, in metres on the ground. Computed automatically from your drawing's size." /></label
           >
           <input
             v-model.number="local.embellishment.beacon_size"
@@ -215,8 +220,9 @@
         </div>
         <div>
           <label
-            class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-            >Label Size</label
+            class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
+            >Label Size
+            <InfoTip text="Text height of beacon names and bearing/distance labels, in metres on the ground. Computed automatically from your drawing's size." /></label
           >
           <input
             v-model.number="local.embellishment.label_size"
@@ -228,8 +234,9 @@
         </div>
         <div class="sm:col-span-2 lg:col-span-5">
           <label
-            class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-            >Beacon Type</label
+            class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
+            >Beacon Type
+            <InfoTip text="Symbol used for survey pillars on the plan. Box (hatched square) is the common convention for concrete beacons." /></label
           >
           <div class="flex flex-wrap gap-3">
             <label
@@ -291,7 +298,7 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div>
           <label
-            class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+            class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
             >Page Size</label
           >
           <select
@@ -301,11 +308,13 @@
             <option value="A4">A4</option>
             <option value="A3">A3</option>
             <option value="A2">A2</option>
+            <option value="A1">A1</option>
+            <option value="A0">A0</option>
           </select>
         </div>
         <div>
           <label
-            class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+            class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
             >Page Orientation</label
           >
           <select
@@ -318,8 +327,9 @@
         </div>
         <div>
           <label
-            class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-            >DXF Version</label
+            class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
+            >DXF Version
+            <InfoTip text="AutoCAD file format version for the DXF/DWG output. Use an older version if your CAD software can't open newer files — R2000 is widely compatible." /></label
           >
           <select
             v-model="local.embellishment.dxf_version"
@@ -351,7 +361,7 @@
           class="relative"
         >
           <label
-            class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+            class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
             >Footer {{ index + 1 }}</label
           >
           <div class="relative">
@@ -391,8 +401,9 @@
       </div>
       <div class="mt-4">
         <label
-          class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-          >Footer Size</label
+          class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
+          >Footer Size
+          <InfoTip text="Text height inside the footer boxes (certificates, property description) at the bottom of the plan." /></label
         >
         <input
           v-model.number="local.embellishment.footer_size"
@@ -419,6 +430,7 @@
 </template>
 
 <script setup lang="ts">
+import InfoTip from "~/components/InfoTip.vue";
 import { reactive, watch, computed, onMounted } from "vue";
 
 interface EmbellishmentState {

@@ -14,9 +14,10 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label
-            class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
           >
             Horizontal Scale
+            <InfoTip text="Drawing units per metre of chainage — stretches or compresses the profile horizontally. 1.0 draws 1 m of road as 1 unit." />
           </label>
           <input
             v-model.number="local.params.horizontal_scale"
@@ -33,9 +34,10 @@
 
         <div>
           <label
-            class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
           >
             Vertical Scale
+            <InfoTip text="Drawing units per metre of elevation. Profiles exaggerate height so gentle slopes are visible — 5–10x the horizontal scale is typical." />
           </label>
           <input
             v-model.number="local.params.vertical_scale"
@@ -54,9 +56,10 @@
       <!-- Profile Origin -->
       <div>
         <label
-          class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+          class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1"
         >
           Profile Origin (X, Y)
+          <InfoTip text="Drawing coordinates where the profile grid starts. Leave at (0, 0) unless composing several profiles on one sheet." />
         </label>
         <div class="grid grid-cols-2 gap-4">
           <div>
@@ -86,9 +89,10 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label
-            class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
           >
             Station Interval (m)
+            <InfoTip text="Ground distance between your chainage stations (how often levels were taken along the route), e.g. 20 m." />
           </label>
           <input
             v-model.number="local.params.station_interval"
@@ -105,9 +109,10 @@
 
         <div>
           <label
-            class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
           >
             Elevation Interval (m)
+            <InfoTip text="Vertical spacing of the horizontal grid lines and elevation labels on the profile." />
           </label>
           <input
             v-model.number="local.params.elevation_interval"
@@ -126,9 +131,10 @@
       <!-- Starting Chainage -->
       <div>
         <label
-          class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
         >
           Starting Chainage (m)
+          <InfoTip text="Chainage of your first station — usually 0 unless this profile continues from a previous section." />
         </label>
         <input
           v-model.number="local.params.starting_chainage"
@@ -159,6 +165,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted } from "vue";
+import InfoTip from "~/components/InfoTip.vue";
 import { useRoute } from "vue-router";
 
 interface LongitudinalParams {
