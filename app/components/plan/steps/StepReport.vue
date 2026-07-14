@@ -281,109 +281,54 @@
         </div>
       </div>
 
-      <!-- Layout Parameters (layout plans) -->
+      <!-- Layout Design (layout plans) -->
       <div v-if="props.basic?.type === 'layout' && props.layoutParams" class="border border-gray-200 dark:border-slate-700 rounded-md p-4 bg-white dark:bg-slate-800">
-        <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4">Layout Parameters</h3>
+        <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4">Layout Design</h3>
 
-        <div class="mb-4">
-          <h4 class="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2">Road Widths</h4>
+        <template v-if="props.layoutParams?.mode === 'draw'">
           <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
             <div>
-              <span class="text-gray-500 dark:text-gray-400">Main Road:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.main_road_width ?? '—' }} m</span>
+              <span class="text-gray-500 dark:text-gray-400">Mode:</span>
+              <span class="ml-2 text-gray-800 dark:text-gray-100">Designed layout (drawn as entered)</span>
             </div>
             <div>
-              <span class="text-gray-500 dark:text-gray-400">Secondary Road:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.secondary_road_width ?? '—' }} m</span>
+              <span class="text-gray-500 dark:text-gray-400">Plots:</span>
+              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.plots?.length ?? 0 }}</span>
             </div>
             <div>
-              <span class="text-gray-500 dark:text-gray-400">Access Road:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.access_road_width ?? '—' }} m</span>
+              <span class="text-gray-500 dark:text-gray-400">Roads:</span>
+              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.roads?.length ?? 0 }}</span>
             </div>
           </div>
-        </div>
-
-        <div class="mb-4">
-          <h4 class="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2">Parcel Constraints</h4>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Min Parcel Area:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.min_parcel_area ?? '—' }} m²</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Max Parcel Area:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.max_parcel_area ?? '—' }} m²</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Min Parcel Width:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.min_parcel_width ?? '—' }} m</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Min Parcel Depth:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.min_parcel_depth ?? '—' }} m</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Target Parcel Ratio:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.target_parcel_ratio ?? '—' }}</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="mb-4">
-          <h4 class="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2">Setbacks</h4>
+        </template>
+        <template v-else>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
             <div>
-              <span class="text-gray-500 dark:text-gray-400">Front Setback:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.front_setback ?? '—' }} m</span>
+              <span class="text-gray-500 dark:text-gray-400">Mode:</span>
+              <span class="ml-2 text-gray-800 dark:text-gray-100">Auto-generated subdivision</span>
             </div>
             <div>
-              <span class="text-gray-500 dark:text-gray-400">Side Setback:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.side_setback ?? '—' }} m</span>
+              <span class="text-gray-500 dark:text-gray-400">Plot Module:</span>
+              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.params?.plot?.frontage ?? '—' }} m × {{ props.layoutParams?.params?.plot?.depth ?? '—' }} m</span>
             </div>
             <div>
-              <span class="text-gray-500 dark:text-gray-400">Rear Setback:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.rear_setback ?? '—' }} m</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="mb-4">
-          <h4 class="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2">Design Options</h4>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Subdivision Type:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ formatSubdivisionType(props.layoutParams?.subdivision_type) }}</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Road Hierarchy:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ formatBool(props.layoutParams?.road_hierarchy) }}</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Include Cul-de-sacs:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ formatBool(props.layoutParams?.include_cul_de_sacs) }}</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Include Green Spaces:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ formatBool(props.layoutParams?.include_green_spaces) }}</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Green Space %:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.green_space_percentage ?? '—' }}%</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Corner Radius:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.corner_radius ?? '—' }} m</span>
+              <span class="text-gray-500 dark:text-gray-400">Roads (major/collector/access):</span>
+              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.params?.roads?.major_width ?? '—' }} / {{ props.layoutParams?.params?.roads?.collector_width ?? '—' }} / {{ props.layoutParams?.params?.roads?.access_width ?? '—' }} m</span>
             </div>
             <div>
               <span class="text-gray-500 dark:text-gray-400">Max Block Length:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.max_block_length ?? '—' }} m</span>
+              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.params?.blocks?.max_length ?? '—' }} m</span>
             </div>
             <div>
-              <span class="text-gray-500 dark:text-gray-400">Max Block Width:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.max_block_width ?? '—' }} m</span>
+              <span class="text-gray-500 dark:text-gray-400">Open Space:</span>
+              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.params?.reserves?.open_space_percent ?? '—' }}%</span>
+            </div>
+            <div>
+              <span class="text-gray-500 dark:text-gray-400">Facilities:</span>
+              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ (props.layoutParams?.params?.reserves?.facilities || []).join(', ') || 'None' }}</span>
             </div>
           </div>
-        </div>
+        </template>
       </div>
 
       <!-- Plan Generation Section -->
@@ -617,10 +562,5 @@ function formatBool(v: boolean | null | undefined) {
 function formatProfileOrigin(origin: any) {
   if (!origin || !Array.isArray(origin)) return "—";
   return `(${origin[0] ?? 0}, ${origin[1] ?? 0})`;
-}
-
-function formatSubdivisionType(type: string | null | undefined) {
-  if (!type) return "—";
-  return type.charAt(0).toUpperCase() + type.slice(1);
 }
 </script>

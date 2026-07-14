@@ -20,8 +20,9 @@
         </div>
 
         <div>
-          <label class="block text-xs text-gray-600 mb-1"
-            >Spot height label size</label
+          <label class="text-xs text-gray-600 mb-1 flex items-center gap-1"
+            >Spot height label size
+            <InfoTip text="Text height (in metres on the ground) of the elevation value written beside each surveyed point." /></label
           >
           <input
             v-model.number="local.point_label_scale"
@@ -47,8 +48,9 @@
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs text-gray-600 mb-1"
-              >Contour interval</label
+            <label class="text-xs text-gray-600 mb-1 flex items-center gap-1"
+              >Contour interval
+              <InfoTip text="Vertical spacing between contour lines, in metres. Smaller intervals show more detail; 0.5 m or 1 m are common." /></label
             >
             <input
               v-model.number="local.contour_interval"
@@ -58,8 +60,9 @@
             />
           </div>
           <div>
-            <label class="block text-xs text-gray-600 mb-1"
-              >Major contour</label
+            <label class="text-xs text-gray-600 mb-1 flex items-center gap-1"
+              >Major contour
+              <InfoTip text="Every contour at a multiple of this elevation is drawn thicker and labelled — usually 5x the contour interval." /></label
             >
             <input
               v-model.number="local.major_contour"
@@ -95,8 +98,9 @@
         </div>
 
         <div>
-          <label class="block text-xs text-gray-600 mb-1"
-            >Contour label size</label
+          <label class="text-xs text-gray-600 mb-1 flex items-center gap-1"
+            >Contour label size
+            <InfoTip text="Text height of the elevation labels written along major contours." /></label
           >
           <input
             v-model.number="local.contour_label_scale"
@@ -107,7 +111,8 @@
         </div>
 
         <div class="mt-2">
-          <label class="block text-xs text-gray-600 mb-1">Surface</label>
+          <label class="text-xs text-gray-600 mb-1 flex items-center gap-1">Surface
+            <InfoTip text="How elevations between your points are estimated: TIN joins points into triangles (best for irregular data); Grid interpolates a smooth regular mesh (best for even coverage)." /></label>
           <div class="flex items-center gap-4">
             <label class="flex items-center gap-2">
               <input
@@ -185,6 +190,7 @@
 <script setup lang="ts">
 import { reactive, watch, ref } from "vue";
 import axios from "axios";
+import InfoTip from "~/components/InfoTip.vue";
 import { useRoute } from "vue-router";
 
 const props = defineProps<{
