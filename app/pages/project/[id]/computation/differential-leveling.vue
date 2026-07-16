@@ -315,22 +315,22 @@
         </h2>
 
         <!-- Summary Information -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div v-if="resultSummary" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           <div class="bg-gray-50 dark:bg-slate-700 p-4 rounded border border-gray-200 dark:border-slate-600">
             <h4 class="font-medium text-gray-800 dark:text-gray-300 text-sm mb-2">
-              Arithmetic Check
+              Totals
             </h4>
             <div class="space-y-1 text-xs">
               <div class="flex justify-between">
-                <span class="text-gray-600 dark:text-gray-400">ΣBS - ΣFS:</span>
+                <span class="text-gray-600 dark:text-gray-400">Total BS (ΣBS):</span>
                 <span class="font-mono text-gray-900 dark:text-gray-100">
-                  {{ computationResults.arithmetic_check?.toFixed(3) || "0.000" }} m
+                  {{ resultSummary.totalBS.toFixed(3) }} m
                 </span>
               </div>
               <div class="flex justify-between">
-                <span class="text-gray-600 dark:text-gray-400">Last RL - First RL:</span>
+                <span class="text-gray-600 dark:text-gray-400">Total FS (ΣFS):</span>
                 <span class="font-mono text-gray-900 dark:text-gray-100">
-                  {{ computationResults.rl_difference?.toFixed(3) || "0.000" }} m
+                  {{ resultSummary.totalFS.toFixed(3) }} m
                 </span>
               </div>
             </div>
@@ -338,19 +338,39 @@
 
           <div class="bg-gray-50 dark:bg-slate-700 p-4 rounded border border-gray-200 dark:border-slate-600">
             <h4 class="font-medium text-gray-800 dark:text-gray-300 text-sm mb-2">
-              Totals
+              Arithmetic Check
             </h4>
             <div class="space-y-1 text-xs">
               <div class="flex justify-between">
-                <span class="text-gray-600 dark:text-gray-400">Total BS:</span>
+                <span class="text-gray-600 dark:text-gray-400">ΣBS − ΣFS:</span>
                 <span class="font-mono text-gray-900 dark:text-gray-100">
-                  {{ computationResults.total_bs?.toFixed(3) || "0.000" }} m
+                  {{ resultSummary.sightDiff.toFixed(3) }} m
                 </span>
               </div>
               <div class="flex justify-between">
-                <span class="text-gray-600 dark:text-gray-400">Total FS:</span>
+                <span class="text-gray-600 dark:text-gray-400">Last RL − First RL:</span>
                 <span class="font-mono text-gray-900 dark:text-gray-100">
-                  {{ computationResults.total_fs?.toFixed(3) || "0.000" }} m
+                  {{ resultSummary.rlDiff.toFixed(3) }} m
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-gray-50 dark:bg-slate-700 p-4 rounded border border-gray-200 dark:border-slate-600">
+            <h4 class="font-medium text-gray-800 dark:text-gray-300 text-sm mb-2">
+              Misclosure
+            </h4>
+            <div class="space-y-1 text-xs">
+              <div class="flex justify-between">
+                <span class="text-gray-600 dark:text-gray-400">Closing error:</span>
+                <span class="font-mono text-gray-900 dark:text-gray-100">
+                  {{ resultSummary.misclosure.toFixed(3) }} m
+                </span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-600 dark:text-gray-400">Instrument setups:</span>
+                <span class="font-mono text-gray-900 dark:text-gray-100">
+                  {{ resultSummary.setups }}
                 </span>
               </div>
             </div>
@@ -361,9 +381,15 @@
               Status
             </h4>
             <div class="text-xs">
-              <span :class="computationResults.is_balanced ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'" class="font-semibold">
-                {{ computationResults.is_balanced ? "✓ Balanced" : "✗ Not Balanced" }}
+              <span
+                :class="resultSummary.balanced ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'"
+                class="font-semibold"
+              >
+                {{ resultSummary.balanced ? "✓ Arithmetic check passed" : "✗ Arithmetic check failed" }}
               </span>
+              <p class="text-gray-500 dark:text-gray-400 mt-1">
+                ΣBS − ΣFS should equal Last RL − First RL.
+              </p>
             </div>
           </div>
         </div>
@@ -421,6 +447,43 @@ const canCompute = computed(() => {
   return levelingRows.value.some(
     (row) => row.station && row.station.trim() !== ""
   );
+});
+
+// Derive the arithmetic-check summary from the stations returned by the API.
+// The API returns { stations, misclosure, number_of_networks } only, so the
+// totals and checks are computed here from the reduced stations.
+const resultSummary = computed(() => {
+  const stations = computationResults.value?.stations as any[] | undefined;
+  if (!stations || stations.length === 0) return null;
+
+  const round3 = (n: number) => Math.round(n * 1000) / 1000;
+
+  const totalBS = stations.reduce(
+    (sum, s) => sum + (typeof s.back_sight === "number" ? s.back_sight : 0),
+    0
+  );
+  const totalFS = stations.reduce(
+    (sum, s) => sum + (typeof s.fore_sight === "number" ? s.fore_sight : 0),
+    0
+  );
+
+  const firstRL = stations[0]?.reduced_level ?? 0;
+  const lastRL = stations[stations.length - 1]?.reduced_level ?? 0;
+
+  const sightDiff = round3(totalBS - totalFS);
+  const rlDiff = round3(lastRL - firstRL);
+  // Arithmetic check passes when ΣBS − ΣFS equals the RL change over the run.
+  const balanced = Math.abs(sightDiff - rlDiff) < 0.0005;
+
+  return {
+    totalBS: round3(totalBS),
+    totalFS: round3(totalFS),
+    sightDiff,
+    rlDiff,
+    balanced,
+    misclosure: computationResults.value?.misclosure ?? 0,
+    setups: computationResults.value?.number_of_networks ?? 0,
+  };
 });
 
 // Methods
