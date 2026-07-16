@@ -692,7 +692,7 @@ const saveComputation = async (name: string) => {
     const traverseData = {
       coordinates: coordinates.value,
       legs: legs.value,
-      apply_misclosure_correction: misclosureCorrection.value,
+      misclosure_correction: misclosureCorrection.value,
     };
 
     await $axios.put(`/plan/traverse-data/edit/${planId}`, traverseData);

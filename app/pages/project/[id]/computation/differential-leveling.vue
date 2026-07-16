@@ -251,6 +251,18 @@
           </table>
         </div>
 
+        <!-- Misclosure Correction -->
+        <div class="flex items-center mt-4">
+          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input
+              type="checkbox"
+              v-model="misclosureCorrection"
+              class="rounded border-gray-300 dark:border-slate-600 text-green-600 focus:ring-green-500"
+            />
+            Apply Misclosure Correction
+          </label>
+        </div>
+
         <!-- Compute Button -->
         <div class="flex items-center gap-4 mt-6">
           <button
@@ -397,6 +409,7 @@ const levelingRows = ref([
 ]);
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
+const misclosureCorrection = ref(true);
 const computationResults = ref<any>(null);
 const computationError = ref("");
 const isComputing = ref(false);
@@ -447,29 +460,42 @@ const performComputation = async () => {
     computationError.value = "";
     computationResults.value = null;
 
-    // Prepare observations
-    const observations = levelingRows.value
+    // Prepare stations
+    const stations = levelingRows.value
       .filter((row) => row.station && row.station.trim() !== "")
-      .map((row) => ({
-        station: row.station,
-        back_sight: row.backSight !== null ? Number(row.backSight) : null,
-        intermediate_sight: row.intermediateSight !== null ? Number(row.intermediateSight) : null,
-        fore_sight: row.foreSight !== null ? Number(row.foreSight) : null,
-        reduced_level: row.reducedLevel !== null ? Number(row.reducedLevel) : null,
-      }));
+      .map((row) => {
+        const station: any = { stn: row.station };
 
-    if (observations.length < 2) {
-      throw new Error("Please provide at least 2 observations");
+        // Only include input fields that have a value
+        if (row.backSight !== null && !isNaN(row.backSight)) {
+          station.back_sight = Number(row.backSight);
+        }
+        if (row.intermediateSight !== null && !isNaN(row.intermediateSight)) {
+          station.intermediate_sight = Number(row.intermediateSight);
+        }
+        if (row.foreSight !== null && !isNaN(row.foreSight)) {
+          station.fore_sight = Number(row.foreSight);
+        }
+        if (row.reducedLevel !== null && !isNaN(row.reducedLevel)) {
+          station.reduced_level = Number(row.reducedLevel);
+        }
+
+        return station;
+      });
+
+    if (stations.length < 2) {
+      throw new Error("Please provide at least 2 stations");
     }
 
     // Check if first row has reduced level
-    if (!observations[0] || observations[0].reduced_level === null) {
+    if (!stations[0] || stations[0].reduced_level === undefined) {
       throw new Error("First station must have a reduced level (benchmark)");
     }
 
     const payload = {
       method: levelingMethod.value,
-      observations,
+      stations,
+      misclosure_correction: misclosureCorrection.value,
     };
 
     // Make API call
@@ -479,8 +505,8 @@ const performComputation = async () => {
     computationResults.value = response.data?.data;
 
     // Update the table with computed values
-    if (response.data?.data?.observations) {
-      response.data.data.observations.forEach((obs: any, index: number) => {
+    if (response.data?.data?.stations) {
+      response.data.data.stations.forEach((obs: any, index: number) => {
         if (levelingRows.value[index]) {
           levelingRows.value[index].heightOfInstrument = obs.height_of_instrument?.toFixed(3) || "";
           levelingRows.value[index].rise = obs.rise?.toFixed(3) || "";
