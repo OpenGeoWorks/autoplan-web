@@ -68,12 +68,13 @@
                 />
               </NuxtLink>
 
-              <button
+              <NuxtLink
+                to="/demo"
                 class="inline-flex items-center justify-center px-8 py-4 text-lg font-semibold text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-gray-500 dark:focus:ring-gray-400"
               >
                 <Icon name="heroicons:play-20-solid" class="mr-2 w-5 h-5" />
                 Watch demo
-              </button>
+              </NuxtLink>
             </div>
           </div>
 

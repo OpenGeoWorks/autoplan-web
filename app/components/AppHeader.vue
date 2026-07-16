@@ -36,6 +36,12 @@
           >
             About
           </NuxtLink>
+          <NuxtLink
+            to="/demo"
+            :class="[navBase, route.path.startsWith('/demo') ? navActive : navDefault]"
+          >
+            Demo
+          </NuxtLink>
 
           <NuxtLink
             to="/login"
