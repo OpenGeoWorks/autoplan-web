@@ -284,10 +284,10 @@
 
           <button
             v-if="computationResults"
-            @click="downloadComputationCSV"
+            @click="showResultsModal = true"
             class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
           >
-            Download Results
+            View Results
           </button>
         </div>
 
@@ -304,98 +304,16 @@
           </p>
         </div>
       </div>
-
-      <!-- Results Section -->
-      <div
-        v-if="computationResults && !computationError"
-        class="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6 mb-6"
-      >
-        <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">
-          Computation Results
-        </h2>
-
-        <!-- Summary Information -->
-        <div v-if="resultSummary" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-          <div class="bg-gray-50 dark:bg-slate-700 p-4 rounded border border-gray-200 dark:border-slate-600">
-            <h4 class="font-medium text-gray-800 dark:text-gray-300 text-sm mb-2">
-              Totals
-            </h4>
-            <div class="space-y-1 text-xs">
-              <div class="flex justify-between">
-                <span class="text-gray-600 dark:text-gray-400">Total BS (ΣBS):</span>
-                <span class="font-mono text-gray-900 dark:text-gray-100">
-                  {{ resultSummary.totalBS.toFixed(3) }} m
-                </span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-gray-600 dark:text-gray-400">Total FS (ΣFS):</span>
-                <span class="font-mono text-gray-900 dark:text-gray-100">
-                  {{ resultSummary.totalFS.toFixed(3) }} m
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div class="bg-gray-50 dark:bg-slate-700 p-4 rounded border border-gray-200 dark:border-slate-600">
-            <h4 class="font-medium text-gray-800 dark:text-gray-300 text-sm mb-2">
-              Arithmetic Check
-            </h4>
-            <div class="space-y-1 text-xs">
-              <div class="flex justify-between">
-                <span class="text-gray-600 dark:text-gray-400">ΣBS − ΣFS:</span>
-                <span class="font-mono text-gray-900 dark:text-gray-100">
-                  {{ resultSummary.sightDiff.toFixed(3) }} m
-                </span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-gray-600 dark:text-gray-400">Last RL − First RL:</span>
-                <span class="font-mono text-gray-900 dark:text-gray-100">
-                  {{ resultSummary.rlDiff.toFixed(3) }} m
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div class="bg-gray-50 dark:bg-slate-700 p-4 rounded border border-gray-200 dark:border-slate-600">
-            <h4 class="font-medium text-gray-800 dark:text-gray-300 text-sm mb-2">
-              Misclosure
-            </h4>
-            <div class="space-y-1 text-xs">
-              <div class="flex justify-between">
-                <span class="text-gray-600 dark:text-gray-400">Closing error:</span>
-                <span class="font-mono text-gray-900 dark:text-gray-100">
-                  {{ resultSummary.misclosure.toFixed(3) }} m
-                </span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-gray-600 dark:text-gray-400">Instrument setups:</span>
-                <span class="font-mono text-gray-900 dark:text-gray-100">
-                  {{ resultSummary.setups }}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div class="bg-gray-50 dark:bg-slate-700 p-4 rounded border border-gray-200 dark:border-slate-600">
-            <h4 class="font-medium text-gray-800 dark:text-gray-300 text-sm mb-2">
-              Status
-            </h4>
-            <div class="text-xs">
-              <span
-                :class="resultSummary.balanced ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'"
-                class="font-semibold"
-              >
-                {{ resultSummary.balanced ? "✓ Arithmetic check passed" : "✗ Arithmetic check failed" }}
-              </span>
-              <p class="text-gray-500 dark:text-gray-400 mt-1">
-                ΣBS − ΣFS should equal Last RL − First RL.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
+
+  <!-- Results Modal -->
+  <DifferentialLevelingResultsModal
+    :show="showResultsModal"
+    :results="computationResults || null"
+    :method="computedMethod"
+    @close="showResultsModal = false"
+  />
 
   <!-- Save Computation Modal -->
   <SaveComputationModal
@@ -411,6 +329,7 @@ import { useRoute } from "vue-router";
 import { navigateTo } from "#imports";
 import { ref, computed } from "vue";
 import SaveComputationModal from "~/components/SaveComputationModal.vue";
+import DifferentialLevelingResultsModal from "~/components/DifferentialLevelingResultsModal.vue";
 import { parseTable } from "~/composables/useSheetParser";
 
 definePageMeta({ middleware: ["auth"] });
@@ -436,6 +355,10 @@ const levelingRows = ref([
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const misclosureCorrection = ref(true);
+const showResultsModal = ref(false);
+const computedMethod = ref<"height-of-instrument" | "rise-and-fall">(
+  "height-of-instrument"
+);
 const computationResults = ref<any>(null);
 const computationError = ref("");
 const isComputing = ref(false);
@@ -447,43 +370,6 @@ const canCompute = computed(() => {
   return levelingRows.value.some(
     (row) => row.station && row.station.trim() !== ""
   );
-});
-
-// Derive the arithmetic-check summary from the stations returned by the API.
-// The API returns { stations, misclosure, number_of_networks } only, so the
-// totals and checks are computed here from the reduced stations.
-const resultSummary = computed(() => {
-  const stations = computationResults.value?.stations as any[] | undefined;
-  if (!stations || stations.length === 0) return null;
-
-  const round3 = (n: number) => Math.round(n * 1000) / 1000;
-
-  const totalBS = stations.reduce(
-    (sum, s) => sum + (typeof s.back_sight === "number" ? s.back_sight : 0),
-    0
-  );
-  const totalFS = stations.reduce(
-    (sum, s) => sum + (typeof s.fore_sight === "number" ? s.fore_sight : 0),
-    0
-  );
-
-  const firstRL = stations[0]?.reduced_level ?? 0;
-  const lastRL = stations[stations.length - 1]?.reduced_level ?? 0;
-
-  const sightDiff = round3(totalBS - totalFS);
-  const rlDiff = round3(lastRL - firstRL);
-  // Arithmetic check passes when ΣBS − ΣFS equals the RL change over the run.
-  const balanced = Math.abs(sightDiff - rlDiff) < 0.0005;
-
-  return {
-    totalBS: round3(totalBS),
-    totalFS: round3(totalFS),
-    sightDiff,
-    rlDiff,
-    balanced,
-    misclosure: computationResults.value?.misclosure ?? 0,
-    setups: computationResults.value?.number_of_networks ?? 0,
-  };
 });
 
 // Methods
@@ -567,17 +453,10 @@ const performComputation = async () => {
 
     computationResults.value = response.data?.data;
 
-    // Update the table with computed values
-    if (response.data?.data?.stations) {
-      response.data.data.stations.forEach((obs: any, index: number) => {
-        if (levelingRows.value[index]) {
-          levelingRows.value[index].heightOfInstrument = obs.height_of_instrument?.toFixed(3) || "";
-          levelingRows.value[index].rise = obs.rise?.toFixed(3) || "";
-          levelingRows.value[index].fall = obs.fall?.toFixed(3) || "";
-          levelingRows.value[index].reducedLevel = obs.reduced_level;
-        }
-      });
-    }
+    // Show the results in a modal instead of prefilling the input table,
+    // so the original uploaded data stays intact for re-computation.
+    computedMethod.value = levelingMethod.value;
+    showResultsModal.value = true;
 
     toast.add({
       title: "Differential leveling completed successfully",
@@ -592,57 +471,6 @@ const performComputation = async () => {
   } finally {
     isComputing.value = false;
   }
-};
-
-const downloadComputationCSV = () => {
-  if (!levelingRows.value || levelingRows.value.length === 0) {
-    toast.add({
-      title: "No computation data to download",
-      color: "warning",
-    });
-    return;
-  }
-
-  let header = "Station,Back Sight(m),Intermediate Sight(m),Fore Sight(m),";
-  if (levelingMethod.value === "height-of-instrument") {
-    header += "Height of Instrument(m),";
-  } else {
-    header += "Rise(m),Fall(m),";
-  }
-  header += "Reduced Level(m)";
-
-  const csvRows = levelingRows.value
-    .filter((row) => row.station && row.station.trim() !== "")
-    .map((row) => {
-      const bs = row.backSight !== null ? row.backSight.toFixed(3) : "";
-      const is = row.intermediateSight !== null ? row.intermediateSight.toFixed(3) : "";
-      const fs = row.foreSight !== null ? row.foreSight.toFixed(3) : "";
-      const rl = row.reducedLevel !== null ? row.reducedLevel.toFixed(3) : "";
-
-      let middleCols = "";
-      if (levelingMethod.value === "height-of-instrument") {
-        middleCols = `${row.heightOfInstrument || ""},`;
-      } else {
-        middleCols = `${row.rise || ""},${row.fall || ""},`;
-      }
-
-      return `${row.station},${bs},${is},${fs},${middleCols}${rl}`;
-    });
-
-  const csvContent = [header, ...csvRows].join("\n");
-
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `differential_leveling_${new Date().toISOString().split("T")[0]}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-
-  toast.add({
-    title: "Computation data downloaded successfully",
-    color: "success",
-  });
 };
 
 // File upload methods

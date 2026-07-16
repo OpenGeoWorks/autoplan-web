@@ -271,18 +271,18 @@
 
           <button
             v-if="computationResults"
-            @click="showSaveModal = true"
-            class="px-6 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+            @click="showResultsModal = true"
+            class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
           >
-            Save Computation
+            View Results
           </button>
 
           <button
             v-if="computationResults"
-            @click="downloadComputationCSV"
-            class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+            @click="showSaveModal = true"
+            class="px-6 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
           >
-            Download Results
+            Save Computation
           </button>
         </div>
 
@@ -298,90 +298,16 @@
             {{ computationError }}
           </p>
         </div>
-
-        <!-- Success Section -->
-        <div
-          v-if="computationResults && !computationError"
-          class="mt-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg"
-        >
-          <h3 class="font-semibold text-green-800 dark:text-green-300 mb-2">
-            Computation Completed
-          </h3>
-          <p class="text-sm text-green-700 dark:text-green-300 mb-4">
-            Forward computation completed successfully. The traverse has been
-            closed and all coordinates have been computed.
-          </p>
-
-          <!-- Misclosure Information -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            <div class="bg-white dark:bg-slate-700 p-3 rounded border">
-              <h4
-                class="font-medium text-green-800 dark:text-green-300 text-sm mb-2"
-              >
-                Misclosure Analysis
-              </h4>
-              <div class="space-y-1 text-xs">
-                <div class="flex justify-between">
-                  <span class="text-gray-600 dark:text-gray-400"
-                    >Northing Misclosure:</span
-                  >
-                  <span class="font-mono text-gray-900 dark:text-gray-100">
-                    {{
-                      computationResults.data?.northing_misclosure?.toFixed(
-                        3
-                      ) || "0.000"
-                    }}
-                  </span>
-                </div>
-                <div class="flex justify-between">
-                  <span class="text-gray-600 dark:text-gray-400"
-                    >Easting Misclosure:</span
-                  >
-                  <span class="font-mono text-gray-900 dark:text-gray-100">
-                    {{
-                      computationResults.data?.easting_misclosure?.toFixed(3) ||
-                      "0.000"
-                    }}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div class="bg-white dark:bg-slate-700 p-3 rounded border">
-              <h4
-                class="font-medium text-green-800 dark:text-green-300 text-sm mb-2"
-              >
-                Traverse Summary
-              </h4>
-              <div class="space-y-1 text-xs">
-                <div class="flex justify-between">
-                  <span class="text-gray-600 dark:text-gray-400"
-                    >Total Distance:</span
-                  >
-                  <span class="font-mono text-gray-900 dark:text-gray-100">
-                    {{
-                      computationResults.data?.traverse?.total_distance?.toFixed(
-                        2
-                      ) || "0.00"
-                    }}
-                    m
-                  </span>
-                </div>
-                <div class="flex justify-between">
-                  <span class="text-gray-600 dark:text-gray-400"
-                    >Correction Applied:</span
-                  >
-                  <span class="font-mono text-gray-900 dark:text-gray-100">
-                    {{ misclosureCorrection ? "Yes" : "No" }}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   </div>
+
+  <!-- Results Modal -->
+  <ForwardComputationResultsModal
+    :show="showResultsModal"
+    :results="computationResults?.data || null"
+    @close="showResultsModal = false"
+  />
 
   <!-- Save Computation Modal -->
   <SaveComputationModal
@@ -397,6 +323,7 @@ import { useRoute } from "vue-router";
 import { navigateTo } from "#imports";
 import { ref, computed } from "vue";
 import { parseTable } from "~/composables/useSheetParser";
+import ForwardComputationResultsModal from "~/components/ForwardComputationResultsModal.vue";
 
 definePageMeta({ middleware: ["auth"] });
 
@@ -427,6 +354,7 @@ const computationError = ref("");
 const isComputing = ref(false);
 const forwardFileInputRef = ref<HTMLInputElement | null>(null);
 const showSaveModal = ref(false);
+const showResultsModal = ref(false);
 const saveModalRef = ref<any>(null);
 
 // Computed properties
@@ -604,84 +532,9 @@ const computeForward = async () => {
 
     computationResults.value = response.data;
 
-    // Fill computed values back into the table
-    if (response.data?.data?.computed_legs) {
-      const startId = response.data?.data?.start?.id;
-
-      response.data.data.computed_legs.forEach((computedLeg: any) => {
-        const targetRow = forwardRows.value.find(
-          (row) => row.pointId === computedLeg.to.id
-        );
-        if (targetRow) {
-          const isFirstStartPoint =
-            targetRow.pointId === startId &&
-            forwardRows.value.findIndex((r) => r.pointId === startId) ===
-              forwardRows.value.indexOf(targetRow);
-
-          if (!isFirstStartPoint) {
-            targetRow.departure = computedLeg.delta_easting.toFixed(3);
-            targetRow.latitude = computedLeg.delta_northing.toFixed(3);
-          }
-
-          targetRow.easting = computedLeg.to.easting;
-          targetRow.northing = computedLeg.to.northing;
-
-          if (!isFirstStartPoint) {
-            if (computedLeg.northing_misclosure !== undefined) {
-              targetRow.northingMisclosure = computedLeg.northing_misclosure;
-            }
-            if (computedLeg.easting_misclosure !== undefined) {
-              targetRow.eastingMisclosure = computedLeg.easting_misclosure;
-            }
-          }
-        }
-      });
-
-      // Handle closing leg
-      if (startId) {
-        const closingLeg = response.data.data.computed_legs.find(
-          (leg: any) => leg.to.id === startId && leg.from.id !== startId
-        );
-
-        if (closingLeg) {
-          const closingRowIndex = forwardRows.value.findIndex(
-            (row, index) => row.pointId === startId && index > 0
-          );
-
-          if (closingRowIndex !== -1) {
-            const closingRow = forwardRows.value[closingRowIndex];
-            if (closingRow) {
-              closingRow.departure = closingLeg.delta_easting.toFixed(3);
-              closingRow.latitude = closingLeg.delta_northing.toFixed(3);
-              closingRow.easting = closingLeg.to.easting;
-              closingRow.northing = closingLeg.to.northing;
-
-              if (closingLeg.northing_misclosure !== undefined) {
-                closingRow.northingMisclosure = closingLeg.northing_misclosure;
-              }
-              if (closingLeg.easting_misclosure !== undefined) {
-                closingRow.eastingMisclosure = closingLeg.easting_misclosure;
-              }
-            }
-          }
-        }
-
-        const firstStartPointIndex = forwardRows.value.findIndex(
-          (row) => row.pointId === startId
-        );
-        if (firstStartPointIndex !== -1) {
-          const firstStartPoint = forwardRows.value[firstStartPointIndex];
-          if (firstStartPoint) {
-            firstStartPoint.departure = "";
-            firstStartPoint.latitude = "";
-            if (response.data?.data?.start) {
-              firstStartPoint.easting = response.data.data.start.easting;
-              firstStartPoint.northing = response.data.data.start.northing;
-            }
-          }
-        }
-      }
-    }
+    // Show the results in a modal instead of prefilling the input table,
+    // so the original uploaded data stays intact for re-computation.
+    showResultsModal.value = true;
 
     toast.add({
       title: "Forward computation completed successfully",
@@ -795,55 +648,6 @@ const downloadForwardTemplate = () => {
   a.download = "forward_template.csv";
   a.click();
   URL.revokeObjectURL(url);
-};
-
-const downloadComputationCSV = () => {
-  if (!forwardRows.value || forwardRows.value.length === 0) {
-    toast.add({
-      title: "No computation data to download",
-      color: "warning",
-    });
-    return;
-  }
-
-  const header =
-    "Point ID,Distance(m),Degrees,Minutes,Seconds,Departure,Latitude,Easting(mE),Northing(mN)";
-
-  const csvRows = forwardRows.value
-    .filter((row) => row.pointId && row.pointId.trim() !== "")
-    .map((row) => {
-      const distance = row.distance !== null ? row.distance : "";
-      const degrees = row.degrees !== null ? row.degrees : "";
-      const minutes = row.minutes !== null ? row.minutes : "";
-      const seconds = row.seconds !== null ? row.seconds : "";
-      const departure = row.departure && typeof row.departure === "string" && row.departure.trim() !== "" 
-        ? parseFloat(row.departure).toFixed(3)
-        : row.departure || "";
-      const latitude = row.latitude && typeof row.latitude === "string" && row.latitude.trim() !== ""
-        ? parseFloat(row.latitude).toFixed(3)
-        : row.latitude || "";
-      const easting = row.easting !== null ? row.easting.toFixed(3) : "";
-      const northing = row.northing !== null ? row.northing.toFixed(3) : "";
-
-      return `${row.pointId},${distance},${degrees},${minutes},${seconds},${departure},${latitude},${easting},${northing}`;
-    });
-
-  const csvContent = [header, ...csvRows].join("\n");
-
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `forward_computation_${
-    new Date().toISOString().split("T")[0]
-  }.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-
-  toast.add({
-    title: "Computation data downloaded successfully",
-    color: "success",
-  });
 };
 
 const saveComputation = async (computationName: string) => {
