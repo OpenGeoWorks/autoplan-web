@@ -501,6 +501,17 @@
     @save="onSaveLeveling"
     @close="showResultsModal = false"
   />
+
+  <!-- Replace / Add choice for saving into a plan -->
+  <SaveDataChoiceModal
+    :show="showChoiceModal"
+    :submitting="choiceSubmitting"
+    title="Save computed elevation data"
+    message="Do you want to replace the existing elevation data, or add these reduced levels to it?"
+    @replace="persistElevations('replace')"
+    @add="persistElevations('add')"
+    @close="showChoiceModal = false"
+  />
 </template>
 
 <script lang="ts" setup>
@@ -508,8 +519,8 @@ import { RiArrowLeftLine, RiDeleteBinLine } from "@remixicon/vue";
 import { useRoute } from "vue-router";
 import { navigateTo } from "#imports";
 import { ref, computed, onMounted } from "vue";
-import { useElevationTransfer } from "~/composables/useElevationTransfer";
 import DifferentialLevelingResultsModal from "~/components/DifferentialLevelingResultsModal.vue";
+import SaveDataChoiceModal from "~/components/SaveDataChoiceModal.vue";
 
 interface LevelingRow {
   stn: string;
@@ -551,6 +562,8 @@ const levelingRows = ref<LevelingRow[]>([
 
 const misclosureCorrection = ref(true);
 const showResultsModal = ref(false);
+const showChoiceModal = ref(false);
+const choiceSubmitting = ref(false);
 const computedMethod = ref<"height-of-instrument" | "rise-and-fall">(
   "height-of-instrument"
 );
@@ -961,76 +974,111 @@ const buildLevelingSavePayload = () => ({
 // Modal save action. Computation-only plans persist the leveling data straight
 // to the API; inside a normal plan, hand the reduced levels to the elevation
 // step and continue the plan flow.
+// Extract the reduced levels from the computed results as elevation points.
+const buildComputedElevations = () => {
+  const stations = computationResults.value?.data?.stations || [];
+  return stations
+    .filter(
+      (s: any) =>
+        s.stn &&
+        s.stn.trim() !== "" &&
+        s.reduced_level !== undefined &&
+        s.reduced_level !== null &&
+        !isNaN(s.reduced_level)
+    )
+    .map((s: any) => ({ id: s.stn, elevation: s.reduced_level, chainage: "" }));
+};
+
+// Merge incoming rows into existing ones by id: matching ids are replaced with
+// the new value in place, new ids are appended.
+const mergeById = <T extends { id: string }>(existing: T[], incoming: T[]): T[] => {
+  const result = existing.map((e) => ({ ...e }));
+  const indexById = new Map(result.map((e, i) => [e.id, i]));
+  for (const item of incoming) {
+    const idx = indexById.get(item.id);
+    if (idx !== undefined) {
+      result[idx] = item;
+    } else {
+      indexById.set(item.id, result.length);
+      result.push(item);
+    }
+  }
+  return result;
+};
+
 const onSaveLeveling = async () => {
-  if (!isComputationOnly.value) {
-    await saveToElevationData();
+  // Computation-only plans persist the leveling data straight to the API.
+  // Inside a normal (route) plan, ask whether to replace or merge the elevation
+  // data, then persist and continue.
+  if (isComputationOnly.value) {
+    try {
+      const { $axios } = useNuxtApp();
+      await $axios.put(
+        `/plan/differential-leveling-data/edit/${planId}`,
+        buildLevelingSavePayload()
+      );
+      showResultsModal.value = false;
+      toast.add({ title: "Leveling data saved successfully", color: "success" });
+    } catch (error: any) {
+      console.error("Failed to save leveling data:", error);
+      toast.add({
+        title:
+          error.response?.data?.message ||
+          "Failed to save leveling data. Please try again.",
+        color: "error",
+      });
+    }
     return;
   }
 
-  try {
-    const { $axios } = useNuxtApp();
-    await $axios.put(
-      `/plan/differential-leveling-data/edit/${planId}`,
-      buildLevelingSavePayload()
-    );
-    showResultsModal.value = false;
+  if (buildComputedElevations().length === 0) {
     toast.add({
-      title: "Leveling data saved successfully",
-      color: "success",
+      title: "No computed elevation data found to save",
+      color: "warning",
     });
-  } catch (error: any) {
-    console.error("Failed to save leveling data:", error);
-    toast.add({
-      title:
-        error.response?.data?.message ||
-        "Failed to save leveling data. Please try again.",
-      color: "error",
-    });
+    return;
   }
+
+  showChoiceModal.value = true;
 };
 
-const saveToElevationData = async () => {
-  try {
-    // Extract elevation data from the computed results (reduced levels).
-    const stations = computationResults.value?.data?.stations || [];
-    const elevations = stations
-      .filter(
-        (s: any) =>
-          s.stn &&
-          s.stn.trim() !== "" &&
-          s.reduced_level !== undefined &&
-          s.reduced_level !== null &&
-          !isNaN(s.reduced_level)
-      )
-      .map((s: any) => ({ point: s.stn, elevation: s.reduced_level }));
+const persistElevations = async (mode: "replace" | "add") => {
+  const incoming = buildComputedElevations();
 
-    if (elevations.length === 0) {
-      toast.add({
-        title: "No computed elevation data found to save",
-        color: "warning",
-      });
-      return;
+  try {
+    choiceSubmitting.value = true;
+    const { $axios } = useNuxtApp();
+
+    let finalElevations: any[] = incoming;
+    if (mode === "add") {
+      const res = await $axios.get(`/plan/fetch/${planId}`);
+      const existingRaw = res.data?.data?.elevations || [];
+      const existing = existingRaw.map((e: any) => ({
+        id: e.id ?? e.point,
+        elevation: e.elevation,
+        chainage: e.chainage ?? "",
+      }));
+      finalElevations = mergeById(existing, incoming);
     }
 
-    // Use the elevation transfer composable
-    const { setTransferredElevations } = useElevationTransfer();
-    setTransferredElevations(elevations);
-
-    toast.add({
-      title: `${elevations.length} elevation points computed successfully`,
-      description: "Returning to plan edit page",
-      color: "success",
+    await $axios.put(`/plan/elevations/edit/${planId}`, {
+      elevations: finalElevations,
     });
 
-    await navigateTo(
-      `/project/${projectId}/plan/${planId}/edit?step=elevation`
-    );
+    showChoiceModal.value = false;
+    showResultsModal.value = false;
+    toast.add({ title: "Elevation data saved successfully", color: "success" });
+    await navigateTo(`/project/${projectId}/plan/${planId}/edit?step=1`);
   } catch (error: any) {
     console.error("Failed to save elevation data:", error);
     toast.add({
-      title: "Failed to prepare elevation data. Please try again.",
+      title:
+        error.response?.data?.message ||
+        "Failed to save elevation data. Please try again.",
       color: "error",
     });
+  } finally {
+    choiceSubmitting.value = false;
   }
 };
 </script>

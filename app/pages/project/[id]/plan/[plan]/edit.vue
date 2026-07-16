@@ -737,6 +737,13 @@ const fetchPlan = async (skipNavigation = false) => {
 
 onMounted(async () => {
   await fetchPlan(false); // Initial load with navigation
+
+  // Honor an explicit ?step=N (e.g. returning from a computation page), which
+  // overrides the data-based auto-progress so we land on the requested tab.
+  const requestedStep = Number(route.query.step);
+  if (Number.isInteger(requestedStep) && requestedStep >= 1) {
+    currentStep.value = requestedStep;
+  }
 });
 
 // Helpers

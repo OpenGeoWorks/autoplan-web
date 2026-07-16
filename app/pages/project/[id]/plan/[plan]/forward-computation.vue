@@ -515,6 +515,17 @@
     @save-coordinates="saveToCoordinates"
     @close="showResultsModal = false"
   />
+
+  <!-- Replace / Add choice for saving into a plan -->
+  <SaveDataChoiceModal
+    :show="showChoiceModal"
+    :submitting="choiceSubmitting"
+    title="Save computed coordinates"
+    message="Do you want to replace the existing coordinates, or add these to them?"
+    @replace="persistCoordinates('replace')"
+    @add="persistCoordinates('add')"
+    @close="showChoiceModal = false"
+  />
 </template>
 
 <script lang="ts" setup>
@@ -522,8 +533,8 @@ import { RiArrowLeftLine, RiDeleteBinLine } from "@remixicon/vue";
 import { useRoute } from "vue-router";
 import { navigateTo } from "#imports";
 import { ref, computed, onMounted, watch } from "vue";
-import { useCoordinateTransfer } from "~/composables/useCoordinateTransfer";
 import ForwardComputationResultsModal from "~/components/ForwardComputationResultsModal.vue";
+import SaveDataChoiceModal from "~/components/SaveDataChoiceModal.vue";
 
 interface ForwardRow {
   pointId: string;
@@ -568,6 +579,9 @@ const misclosureCorrection = ref(false);
 const computationResults = ref<any>(null);
 const computationError = ref("");
 const showResultsModal = ref(false);
+const showChoiceModal = ref(false);
+const choiceSubmitting = ref(false);
+const planType = ref("");
 const isLoading = ref(true);
 const isComputing = ref(false);
 const forwardFileInputRef = ref<HTMLInputElement | null>(null);
@@ -611,6 +625,7 @@ const fetchPlanData = async () => {
     if (response.data?.data?.computation_only === true) {
       isComputationOnly.value = true;
     }
+    planType.value = response.data?.data?.type || "";
 
     if (response.data?.data?.forward_computation_data) {
       const forwardData = response.data.data.forward_computation_data;
@@ -1021,26 +1036,19 @@ const downloadForwardTemplate = () => {
   URL.revokeObjectURL(url);
 };
 
-const saveToCoordinates = async () => {
+// Build the coordinate list from the computed results: the start point plus
+// the "to" point of every computed leg, each kept once and in order.
+const buildComputedCoordinates = () => {
   const data = computationResults.value?.data;
-  if (!data) {
-    toast.add({
-      title: "Run the computation before saving coordinates",
-      color: "warning",
-    });
-    return;
-  }
-
-  // Build the coordinate list from the computed results: the start point plus
-  // the "to" point of every computed leg, each kept once and in order.
   const coordinates: {
     id: string;
     northing: number;
     easting: number;
     elevation: number;
   }[] = [];
-  const seen = new Set<string>();
+  if (!data) return coordinates;
 
+  const seen = new Set<string>();
   if (data.start?.id) {
     coordinates.push({
       id: data.start.id,
@@ -1050,7 +1058,6 @@ const saveToCoordinates = async () => {
     });
     seen.add(data.start.id);
   }
-
   (data.computed_legs || []).forEach((leg: any) => {
     if (leg.to?.id && !seen.has(leg.to.id)) {
       coordinates.push({
@@ -1062,7 +1069,54 @@ const saveToCoordinates = async () => {
       seen.add(leg.to.id);
     }
   });
+  return coordinates;
+};
 
+// Where computed coordinates land depends on the plan type: the coordinate
+// table (cadastral), the perimeter survey (topographic) or the site boundary
+// (layout). Each has its own endpoint and existing-data source.
+const coordinateDestination = () => {
+  switch (planType.value) {
+    case "topographic":
+      return {
+        endpoint: `/plan/topo/boundary/edit/${planId}`,
+        existing: (d: any) => d?.topographic_boundary?.coordinates,
+        includeElevation: true,
+      };
+    case "layout":
+      return {
+        endpoint: `/plan/layout/boundary/edit/${planId}`,
+        existing: (d: any) => d?.layout_boundary?.coordinates,
+        includeElevation: false,
+      };
+    default:
+      return {
+        endpoint: `/plan/coordinates/edit/${planId}`,
+        existing: (d: any) => d?.coordinates,
+        includeElevation: true,
+      };
+  }
+};
+
+// Merge incoming rows into existing ones by id: matching ids are replaced with
+// the new value in place, new ids are appended.
+const mergeById = <T extends { id: string }>(existing: T[], incoming: T[]): T[] => {
+  const result = existing.map((e) => ({ ...e }));
+  const indexById = new Map(result.map((e, i) => [e.id, i]));
+  for (const item of incoming) {
+    const idx = indexById.get(item.id);
+    if (idx !== undefined) {
+      result[idx] = item;
+    } else {
+      indexById.set(item.id, result.length);
+      result.push(item);
+    }
+  }
+  return result;
+};
+
+const saveToCoordinates = async () => {
+  const coordinates = buildComputedCoordinates();
   if (coordinates.length === 0) {
     toast.add({
       title: "No computed coordinates found to save",
@@ -1071,32 +1125,59 @@ const saveToCoordinates = async () => {
     return;
   }
 
-  // Computation-only plans save the coordinates straight to the API. Inside a
-  // normal plan, hand them to the coordinate step and continue the plan flow.
-  if (!isComputationOnly.value) {
-    const { setTransferredCoordinates } = useCoordinateTransfer();
-    setTransferredCoordinates(
-      coordinates.map((c) => ({
-        point: c.id,
-        easting: c.easting,
-        northing: c.northing,
-        elevation: null,
-      }))
-    );
-    await navigateTo(
-      `/project/${projectId}/plan/${planId}/edit?step=coordinates`
-    );
+  // Computation-only plans save straight to the coordinates endpoint. Inside a
+  // normal plan, ask whether to replace or merge, then persist and continue.
+  if (isComputationOnly.value) {
+    try {
+      const { $axios } = useNuxtApp();
+      await $axios.put(`/plan/coordinates/edit/${planId}`, { coordinates });
+      showResultsModal.value = false;
+      toast.add({ title: "Coordinates saved successfully", color: "success" });
+    } catch (error: any) {
+      console.error("Failed to save coordinates:", error);
+      toast.add({
+        title:
+          error.response?.data?.message ||
+          "Failed to save coordinates. Please try again.",
+        color: "error",
+      });
+    }
     return;
   }
 
+  showChoiceModal.value = true;
+};
+
+const persistCoordinates = async (mode: "replace" | "add") => {
+  const dest = coordinateDestination();
+  const incoming = buildComputedCoordinates().map((c) =>
+    dest.includeElevation
+      ? c
+      : { id: c.id, northing: c.northing, easting: c.easting }
+  );
+
   try {
+    choiceSubmitting.value = true;
     const { $axios } = useNuxtApp();
-    await $axios.put(`/plan/coordinates/edit/${planId}`, { coordinates });
+
+    let finalCoordinates: any[] = incoming;
+    if (mode === "add") {
+      const res = await $axios.get(`/plan/fetch/${planId}`);
+      const existingRaw = dest.existing(res.data?.data) || [];
+      const existing = existingRaw.map((c: any) => {
+        const base: any = { id: c.id, northing: c.northing, easting: c.easting };
+        if (dest.includeElevation) base.elevation = c.elevation ?? 0;
+        return base;
+      });
+      finalCoordinates = mergeById(existing, incoming);
+    }
+
+    await $axios.put(dest.endpoint, { coordinates: finalCoordinates });
+
+    showChoiceModal.value = false;
     showResultsModal.value = false;
-    toast.add({
-      title: "Coordinates saved successfully",
-      color: "success",
-    });
+    toast.add({ title: "Coordinates saved successfully", color: "success" });
+    await navigateTo(`/project/${projectId}/plan/${planId}/edit?step=1`);
   } catch (error: any) {
     console.error("Failed to save coordinates:", error);
     toast.add({
@@ -1105,6 +1186,8 @@ const saveToCoordinates = async () => {
         "Failed to save coordinates. Please try again.",
       color: "error",
     });
+  } finally {
+    choiceSubmitting.value = false;
   }
 };
 </script>
