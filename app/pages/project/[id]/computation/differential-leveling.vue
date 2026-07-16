@@ -584,12 +584,14 @@ const saveComputation = async (name: string) => {
     saveModalRef.value.setLoading(true);
     saveModalRef.value.setError("");
 
-    // Step 1: Create a computation-only plan
+    // Step 1: Create a computation-only plan. Differential leveling saves its
+    // reduced levels against a route-type plan.
     const { $axios } = useNuxtApp();
     const planResponse = await $axios.post("/plan/create", {
       name,
       project: projectId,
       computation_only: true,
+      type: "route",
     });
 
     const planId = planResponse.data?.data?.id;

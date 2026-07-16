@@ -352,22 +352,13 @@
               <span v-else>Compute</span>
             </button>
 
-            <!-- Save to Elevation Data Button - shown after computation -->
+            <!-- View Results Button - shown after computation -->
             <button
               v-if="computationResults"
-              @click="saveToElevationData"
-              class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              @click="showResultsModal = true"
+              class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
-              Save Elevation Data
-            </button>
-
-            <!-- Download CSV Button - shown after computation -->
-            <button
-              v-if="computationResults"
-              @click="downloadComputationCSV"
-              class="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-            >
-              Download CSV
+              View Results
             </button>
           </div>
         </div>
@@ -500,6 +491,16 @@
       </div>
     </div>
   </div>
+
+  <!-- Results Modal -->
+  <DifferentialLevelingResultsModal
+    :show="showResultsModal"
+    :results="computationResults?.data || null"
+    :method="computedMethod"
+    :can-save="true"
+    @save="onSaveLeveling"
+    @close="showResultsModal = false"
+  />
 </template>
 
 <script lang="ts" setup>
@@ -508,6 +509,7 @@ import { useRoute } from "vue-router";
 import { navigateTo } from "#imports";
 import { ref, computed, onMounted } from "vue";
 import { useElevationTransfer } from "~/composables/useElevationTransfer";
+import DifferentialLevelingResultsModal from "~/components/DifferentialLevelingResultsModal.vue";
 
 interface LevelingRow {
   stn: string;
@@ -548,6 +550,10 @@ const levelingRows = ref<LevelingRow[]>([
 ]);
 
 const misclosureCorrection = ref(true);
+const showResultsModal = ref(false);
+const computedMethod = ref<"height-of-instrument" | "rise-and-fall">(
+  "height-of-instrument"
+);
 const computationResults = ref<any>(null);
 const computationError = ref("");
 const isLoading = ref(true);
@@ -714,38 +720,10 @@ const performComputation = async () => {
 
     computationResults.value = response.data;
 
-    // Fill computed values back into the table
-    if (response.data?.data?.stations) {
-      response.data.data.stations.forEach(
-        (computedStation: any, index: number) => {
-          if (levelingRows.value[index]) {
-            const row = levelingRows.value[index];
-
-            // Update computed fields
-            if (computedStation.reduced_level !== undefined) {
-              row.reduced_level = computedStation.reduced_level;
-            }
-
-            if (levelingMethod.value === "height-of-instrument") {
-              if (computedStation.height_of_instrument !== undefined) {
-                row.height_of_instrument = computedStation.height_of_instrument;
-              }
-            } else if (levelingMethod.value === "rise-and-fall") {
-              if (computedStation.rise !== undefined) {
-                row.rise = computedStation.rise;
-              }
-              if (computedStation.fall !== undefined) {
-                row.fall = computedStation.fall;
-              }
-            }
-
-            if (computedStation.correction !== undefined) {
-              row.correction = computedStation.correction;
-            }
-          }
-        }
-      );
-    }
+    // Show the results in a modal instead of prefilling the input table, so the
+    // saved data stays intact when editing an existing computation.
+    computedMethod.value = levelingMethod.value;
+    showResultsModal.value = true;
 
     // Save the table data to the plan
     try {
@@ -956,94 +934,75 @@ const downloadLevelingTemplate = () => {
   URL.revokeObjectURL(url);
 };
 
-const downloadComputationCSV = () => {
-  if (!levelingRows.value || levelingRows.value.length === 0) {
-    toast.add({
-      title: "No computation data to download",
-      color: "warning",
-    });
+// Rebuild the leveling data payload (input readings only) for saving.
+const buildLevelingSavePayload = () => ({
+  method: computedMethod.value,
+  misclosure_correction: misclosureCorrection.value,
+  stations: levelingRows.value
+    .filter((row) => row.stn && row.stn.trim() !== "")
+    .map((row) => {
+      const station: any = { stn: row.stn };
+      if (row.back_sight !== null && !isNaN(row.back_sight)) {
+        station.back_sight = row.back_sight;
+      }
+      if (row.intermediate_sight !== null && !isNaN(row.intermediate_sight)) {
+        station.intermediate_sight = row.intermediate_sight;
+      }
+      if (row.fore_sight !== null && !isNaN(row.fore_sight)) {
+        station.fore_sight = row.fore_sight;
+      }
+      if (row.reduced_level !== null && !isNaN(row.reduced_level)) {
+        station.reduced_level = row.reduced_level;
+      }
+      return station;
+    }),
+});
+
+// Modal save action. Computation-only plans persist the leveling data straight
+// to the API; inside a normal plan, hand the reduced levels to the elevation
+// step and continue the plan flow.
+const onSaveLeveling = async () => {
+  if (!isComputationOnly.value) {
+    await saveToElevationData();
     return;
   }
 
-  // Create CSV header based on method
-  let header = "Station,Back Sight(m),Intermediate Sight(m),Fore Sight(m),";
-  if (levelingMethod.value === "height-of-instrument") {
-    header += "Height of Instrument(m),";
-  } else {
-    header += "Rise(m),Fall(m),";
-  }
-  header += "Reduced Level(m),Correction";
-
-  // Convert rows to CSV format
-  const csvRows = levelingRows.value
-    .filter((row) => row.stn && row.stn.trim() !== "")
-    .map((row) => {
-      const back_sight = row.back_sight !== null ? row.back_sight : "";
-      const intermediate_sight =
-        row.intermediate_sight !== null ? row.intermediate_sight : "";
-      const fore_sight = row.fore_sight !== null ? row.fore_sight : "";
-      const reduced_level =
-        row.reduced_level !== null ? row.reduced_level.toFixed(3) : "";
-      const correction =
-        row.correction !== null ? row.correction.toFixed(4) : "";
-
-      let methodSpecific = "";
-      if (levelingMethod.value === "height-of-instrument") {
-        const hoi =
-          row.height_of_instrument !== null
-            ? row.height_of_instrument.toFixed(3)
-            : "";
-        methodSpecific = hoi;
-      } else {
-        const rise = row.rise !== null ? row.rise.toFixed(3) : "";
-        const fall = row.fall !== null ? row.fall.toFixed(3) : "";
-        methodSpecific = `${rise},${fall}`;
-      }
-
-      return `${row.stn},${back_sight},${intermediate_sight},${fore_sight},${methodSpecific},${reduced_level},${correction}`;
+  try {
+    const { $axios } = useNuxtApp();
+    await $axios.put(
+      `/plan/differential-leveling-data/edit/${planId}`,
+      buildLevelingSavePayload()
+    );
+    showResultsModal.value = false;
+    toast.add({
+      title: "Leveling data saved successfully",
+      color: "success",
     });
-
-  // Combine header and data
-  const csvContent = [header, ...csvRows].join("\n");
-
-  // Create and download the file
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `differential_leveling_${levelingMethod.value}_${
-    new Date().toISOString().split("T")[0]
-  }.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-
-  toast.add({
-    title: "Computation data downloaded successfully",
-    color: "success",
-  });
+  } catch (error: any) {
+    console.error("Failed to save leveling data:", error);
+    toast.add({
+      title:
+        error.response?.data?.message ||
+        "Failed to save leveling data. Please try again.",
+      color: "error",
+    });
+  }
 };
 
 const saveToElevationData = async () => {
   try {
-    // Extract elevation data from computed results
-    const elevations: {
-      point: string;
-      elevation: number;
-    }[] = [];
-
-    levelingRows.value.forEach((row) => {
-      if (
-        row.stn &&
-        row.stn.trim() !== "" &&
-        row.reduced_level !== null &&
-        !isNaN(row.reduced_level)
-      ) {
-        elevations.push({
-          point: row.stn,
-          elevation: row.reduced_level,
-        });
-      }
-    });
+    // Extract elevation data from the computed results (reduced levels).
+    const stations = computationResults.value?.data?.stations || [];
+    const elevations = stations
+      .filter(
+        (s: any) =>
+          s.stn &&
+          s.stn.trim() !== "" &&
+          s.reduced_level !== undefined &&
+          s.reduced_level !== null &&
+          !isNaN(s.reduced_level)
+      )
+      .map((s: any) => ({ point: s.stn, elevation: s.reduced_level }));
 
     if (elevations.length === 0) {
       toast.add({

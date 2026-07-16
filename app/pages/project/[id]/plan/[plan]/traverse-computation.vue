@@ -387,6 +387,15 @@
               </span>
               <span v-else>Compute</span>
             </button>
+
+            <!-- View Results Button - shown after computation -->
+            <button
+              v-if="computationResults"
+              @click="showResultsModal = true"
+              class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              View Results
+            </button>
           </div>
         </div>
 
@@ -410,6 +419,7 @@
   <TraverseComputationResultsModal
     :show="showResultsModal"
     :results="computationResults?.data || null"
+    :can-save-coordinates="true"
     @close="closeModal"
     @save-coordinates="handleSaveCoordinates"
   />
@@ -724,6 +734,26 @@ const handleSaveCoordinates = async (
       return;
     }
 
+    // Computation-only plans save the coordinates straight to the API. Inside a
+    // normal plan, hand them to the coordinate step and continue the plan flow.
+    if (isComputationOnly.value) {
+      const { $axios } = useNuxtApp();
+      await $axios.put(`/plan/coordinates/edit/${planId}`, {
+        coordinates: ordered.map((r) => ({
+          id: r.point,
+          northing: r.northing,
+          easting: r.easting,
+          elevation: r.elevation ?? 0,
+        })),
+      });
+      showResultsModal.value = false;
+      toast.add({
+        title: "Coordinates saved successfully",
+        color: "success",
+      });
+      return;
+    }
+
     // Store coordinates in the composable
     setTransferredCoordinates(
       ordered.map((r) => ({
@@ -739,9 +769,11 @@ const handleSaveCoordinates = async (
       `/project/${projectId}/plan/${planId}/edit?step=coordinates`
     );
   } catch (error: any) {
-    console.error("Failed to prepare coordinate transfer:", error);
+    console.error("Failed to save coordinates:", error);
     toast.add({
-      title: "Failed to prepare coordinate transfer. Please try again.",
+      title:
+        error.response?.data?.message ||
+        "Failed to save coordinates. Please try again.",
       color: "error",
     });
   }

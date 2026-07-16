@@ -162,6 +162,13 @@
           Export CSV
         </button>
         <button
+          v-if="canSave"
+          @click="$emit('save')"
+          class="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+        >
+          Save Leveling Data
+        </button>
+        <button
           @click="$emit('close')"
           class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
         >
@@ -197,9 +204,10 @@ const props = defineProps<{
   show: boolean;
   results: Results | null;
   method: "height-of-instrument" | "rise-and-fall";
+  canSave?: boolean;
 }>();
 
-defineEmits<{ close: [] }>();
+defineEmits<{ close: []; save: [] }>();
 
 const fmt = (v: number | undefined | null): string => {
   if (v === undefined || v === null || isNaN(v)) return "";
@@ -228,7 +236,14 @@ const summary = computed(() => {
     0
   );
   const firstRL = list[0]?.reduced_level ?? 0;
-  const lastRL = list[list.length - 1]?.reduced_level ?? 0;
+  const lastStation = list[list.length - 1];
+  // The arithmetic check (ΣBS − ΣFS = Last RL − First RL) holds for the raw
+  // reduction. When misclosure correction is applied the final RLs are shifted,
+  // so compare against the pre-correction RL by removing the last correction
+  // (which carries the full distributed misclosure).
+  const lastCorrection =
+    typeof lastStation?.correction === "number" ? lastStation.correction : 0;
+  const lastRL = (lastStation?.reduced_level ?? 0) - lastCorrection;
   const sightDiff = round3(totalBS - totalFS);
   const rlDiff = round3(lastRL - firstRL);
 

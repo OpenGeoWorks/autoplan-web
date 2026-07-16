@@ -444,6 +444,7 @@
           Export CSV
         </button>
         <button
+          v-if="canSaveCoordinates"
           @click="saveCoordinates"
           class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
         >
@@ -535,6 +536,7 @@ interface TraverseResults {
 const props = defineProps<{
   show: boolean;
   results: TraverseResults | null;
+  canSaveCoordinates?: boolean;
 }>();
 
 const emit = defineEmits<{

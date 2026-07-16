@@ -364,22 +364,13 @@
               <span v-else>Compute</span>
             </button>
 
-            <!-- Save to Coordinates Button - shown after computation -->
+            <!-- View Results Button - shown after computation -->
             <button
               v-if="computationResults"
-              @click="saveToCoordinates"
-              class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              @click="showResultsModal = true"
+              class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
-              Save Coordinates
-            </button>
-
-            <!-- Download CSV Button - shown after computation -->
-            <button
-              v-if="computationResults"
-              @click="downloadComputationCSV"
-              class="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-            >
-              Download CSV
+              View Results
             </button>
           </div>
         </div>
@@ -515,6 +506,15 @@
       </div>
     </div>
   </div>
+
+  <!-- Results Modal -->
+  <ForwardComputationResultsModal
+    :show="showResultsModal"
+    :results="computationResults?.data || null"
+    :can-save-coordinates="true"
+    @save-coordinates="saveToCoordinates"
+    @close="showResultsModal = false"
+  />
 </template>
 
 <script lang="ts" setup>
@@ -523,6 +523,7 @@ import { useRoute } from "vue-router";
 import { navigateTo } from "#imports";
 import { ref, computed, onMounted, watch } from "vue";
 import { useCoordinateTransfer } from "~/composables/useCoordinateTransfer";
+import ForwardComputationResultsModal from "~/components/ForwardComputationResultsModal.vue";
 
 interface ForwardRow {
   pointId: string;
@@ -566,6 +567,7 @@ const forwardRows = ref<ForwardRow[]>([
 const misclosureCorrection = ref(false);
 const computationResults = ref<any>(null);
 const computationError = ref("");
+const showResultsModal = ref(false);
 const isLoading = ref(true);
 const isComputing = ref(false);
 const forwardFileInputRef = ref<HTMLInputElement | null>(null);
@@ -875,92 +877,9 @@ const performComputation = async () => {
 
     computationResults.value = response.data;
 
-    // Fill computed values back into the table
-    if (response.data?.data?.computed_legs) {
-      const startId = response.data?.data?.start?.id;
-
-      response.data.data.computed_legs.forEach((computedLeg: any) => {
-        const targetRow = forwardRows.value.find(
-          (row) => row.pointId === computedLeg.to.id
-        );
-        if (targetRow) {
-          // Only fill departure and latitude if this is not the first occurrence of the start point
-          const isFirstStartPoint =
-            targetRow.pointId === startId &&
-            forwardRows.value.findIndex((r) => r.pointId === startId) ===
-              forwardRows.value.indexOf(targetRow);
-
-          if (!isFirstStartPoint) {
-            targetRow.departure = computedLeg.delta_easting.toFixed(3);
-            targetRow.latitude = computedLeg.delta_northing.toFixed(3);
-          }
-
-          targetRow.easting = computedLeg.to.easting;
-          targetRow.northing = computedLeg.to.northing;
-
-          // Add misclosure values if available, but only for non-start points
-          // The first row (start point) should only contain northing and easting
-          if (!isFirstStartPoint) {
-            if (computedLeg.northing_misclosure !== undefined) {
-              targetRow.northingMisclosure = computedLeg.northing_misclosure;
-            }
-            if (computedLeg.easting_misclosure !== undefined) {
-              targetRow.eastingMisclosure = computedLeg.easting_misclosure;
-            }
-          }
-        }
-      });
-
-      // Handle closed traverse - find the closing leg and update the corresponding row
-      if (startId) {
-        // Find the closing leg that goes back to the start point
-        const closingLeg = response.data.data.computed_legs.find(
-          (leg: any) => leg.to.id === startId && leg.from.id !== startId
-        );
-
-        if (closingLeg) {
-          // Find the closing row (the row that represents the closing leg back to start)
-          const closingRowIndex = forwardRows.value.findIndex(
-            (row, index) => row.pointId === startId && index > 0 // Not the first occurrence
-          );
-
-          if (closingRowIndex !== -1) {
-            const closingRow = forwardRows.value[closingRowIndex];
-            if (closingRow) {
-              closingRow.departure = closingLeg.delta_easting.toFixed(3);
-              closingRow.latitude = closingLeg.delta_northing.toFixed(3);
-              closingRow.easting = closingLeg.to.easting;
-              closingRow.northing = closingLeg.to.northing;
-
-              // Add misclosure values for the closing leg
-              if (closingLeg.northing_misclosure !== undefined) {
-                closingRow.northingMisclosure = closingLeg.northing_misclosure;
-              }
-              if (closingLeg.easting_misclosure !== undefined) {
-                closingRow.eastingMisclosure = closingLeg.easting_misclosure;
-              }
-            }
-          }
-        }
-
-        // Ensure the first start point row has no departure/latitude values
-        const firstStartPointIndex = forwardRows.value.findIndex(
-          (row) => row.pointId === startId
-        );
-        if (firstStartPointIndex !== -1) {
-          const firstStartPoint = forwardRows.value[firstStartPointIndex];
-          if (firstStartPoint) {
-            firstStartPoint.departure = "";
-            firstStartPoint.latitude = "";
-            // Keep the original or computed easting/northing
-            if (response.data?.data?.start) {
-              firstStartPoint.easting = response.data.data.start.easting;
-              firstStartPoint.northing = response.data.data.start.northing;
-            }
-          }
-        }
-      }
-    }
+    // Show the results in a modal instead of prefilling the input table, so the
+    // saved data stays intact when editing an existing forward computation.
+    showResultsModal.value = true;
 
     // Save the table data to the plan
     try {
@@ -1102,179 +1021,88 @@ const downloadForwardTemplate = () => {
   URL.revokeObjectURL(url);
 };
 
-const downloadComputationCSV = () => {
-  if (!forwardRows.value || forwardRows.value.length === 0) {
+const saveToCoordinates = async () => {
+  const data = computationResults.value?.data;
+  if (!data) {
     toast.add({
-      title: "No computation data to download",
+      title: "Run the computation before saving coordinates",
       color: "warning",
     });
     return;
   }
 
-  // Create CSV header (excluding misclosure columns)
-  const header =
-    "Point ID,Distance(m),Degrees,Minutes,Seconds,Departure,Latitude,Easting(mE),Northing(mN)";
-
-  // Convert rows to CSV format (excluding misclosure columns)
-  const csvRows = forwardRows.value
-    .filter((row) => row.pointId && row.pointId.trim() !== "")
-    .map((row) => {
-      const distance = row.distance !== null ? row.distance : "";
-      const degrees = row.degrees !== null ? row.degrees : "";
-      const minutes = row.minutes !== null ? row.minutes : "";
-      const seconds = row.seconds !== null ? row.seconds : "";
-      const departure =
-        typeof row.departure === "number"
-          ? row.departure.toFixed(3)
-          : row.departure || "";
-      const latitude =
-        typeof row.latitude === "number"
-          ? row.latitude.toFixed(3)
-          : row.latitude || "";
-      const easting = row.easting !== null ? row.easting.toFixed(3) : "";
-      const northing = row.northing !== null ? row.northing.toFixed(3) : "";
-
-      return `${row.pointId},${distance},${degrees},${minutes},${seconds},${departure},${latitude},${easting},${northing}`;
-    });
-
-  // Combine header and data
-  const csvContent = [header, ...csvRows].join("\n");
-
-  // Create and download the file
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `forward_computation_${
-    new Date().toISOString().split("T")[0]
-  }.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-
-  toast.add({
-    title: "Computation data downloaded successfully",
-    color: "success",
-  });
-};
-
-const saveToCoordinates = async () => {
-  try {
-    const ordered: {
-      point: string;
-      easting: number;
-      northing: number;
-      elevation: null;
-    }[] = [];
-    const seen = new Set<string>();
-
-    let startId: string | null = null;
-    if (computationResults.value?.data?.start?.id) {
-      startId = computationResults.value.data.start.id;
-    } else {
-      const firstStartRow = forwardRows.value.find(
-        (r) =>
-          r.easting !== null &&
-          r.northing !== null &&
-          r.pointId &&
-          r.pointId.trim() !== ""
-      );
-      if (firstStartRow) startId = firstStartRow.pointId;
-    }
-
-    const lastIndexOfStart = startId
-      ? forwardRows.value.reduce(
-          (acc, r, idx) => (r.pointId === startId ? idx : acc),
-          -1
-        )
-      : -1;
-
-    const firstIndexOfStart = startId
-      ? forwardRows.value.findIndex((r) => r.pointId === startId)
-      : -1;
-
-    forwardRows.value.forEach((row, idx) => {
-      if (
-        row.pointId &&
-        row.pointId.trim() !== "" &&
-        row.easting !== null &&
-        row.northing !== null &&
-        !isNaN(row.easting) &&
-        !isNaN(row.northing)
-      ) {
-        const pid = row.pointId;
-
-        if (!seen.has(pid)) {
-          ordered.push({
-            point: pid,
-            easting: row.easting!,
-            northing: row.northing!,
-            elevation: null,
-          });
-          seen.add(pid);
-        } else {
-          if (
-            startId &&
-            pid === startId &&
-            idx === lastIndexOfStart &&
-            lastIndexOfStart !== firstIndexOfStart
-          ) {
-            ordered.push({
-              point: pid,
-              easting: row.easting!,
-              northing: row.northing!,
-              elevation: null,
-            });
-          }
-        }
-      }
-    });
-
-    const coordinates = ordered;
-
-    if (startId) {
-      const firstIdx = coordinates.findIndex((c) => c.point === startId);
-      if (firstIdx > 0) {
-        const spliced = coordinates.splice(firstIdx, 1);
-        const item = spliced && spliced.length ? spliced[0] : undefined;
-        if (item) coordinates.unshift(item);
-      }
-    }
-    if (coordinates.length === 0) {
-      toast.add({
-        title: "No computed coordinates found to save",
-        color: "warning",
-      });
-      return;
-    }
-
-    await handleSaveCoordinates(coordinates);
-  } catch (error: any) {
-    console.error("Failed to save coordinates:", error);
-    toast.add({
-      title: "Failed to save coordinates. Please try again.",
-      color: "error",
-    });
-  }
-};
-
-const handleSaveCoordinates = async (
-  coordinates: {
-    point: string;
-    easting: number;
+  // Build the coordinate list from the computed results: the start point plus
+  // the "to" point of every computed leg, each kept once and in order.
+  const coordinates: {
+    id: string;
     northing: number;
-    elevation: number | null;
-  }[]
-) => {
-  try {
+    easting: number;
+    elevation: number;
+  }[] = [];
+  const seen = new Set<string>();
+
+  if (data.start?.id) {
+    coordinates.push({
+      id: data.start.id,
+      northing: data.start.northing,
+      easting: data.start.easting,
+      elevation: 0,
+    });
+    seen.add(data.start.id);
+  }
+
+  (data.computed_legs || []).forEach((leg: any) => {
+    if (leg.to?.id && !seen.has(leg.to.id)) {
+      coordinates.push({
+        id: leg.to.id,
+        northing: leg.to.northing,
+        easting: leg.to.easting,
+        elevation: 0,
+      });
+      seen.add(leg.to.id);
+    }
+  });
+
+  if (coordinates.length === 0) {
+    toast.add({
+      title: "No computed coordinates found to save",
+      color: "warning",
+    });
+    return;
+  }
+
+  // Computation-only plans save the coordinates straight to the API. Inside a
+  // normal plan, hand them to the coordinate step and continue the plan flow.
+  if (!isComputationOnly.value) {
     const { setTransferredCoordinates } = useCoordinateTransfer();
-    setTransferredCoordinates(coordinates);
+    setTransferredCoordinates(
+      coordinates.map((c) => ({
+        point: c.id,
+        easting: c.easting,
+        northing: c.northing,
+        elevation: null,
+      }))
+    );
     await navigateTo(
       `/project/${projectId}/plan/${planId}/edit?step=coordinates`
     );
-  } catch (error: any) {
-    console.error("Failed to prepare coordinate transfer:", error);
+    return;
+  }
+
+  try {
+    const { $axios } = useNuxtApp();
+    await $axios.put(`/plan/coordinates/edit/${planId}`, { coordinates });
+    showResultsModal.value = false;
     toast.add({
-      title: "Failed to prepare coordinate transfer. Please try again.",
+      title: "Coordinates saved successfully",
+      color: "success",
+    });
+  } catch (error: any) {
+    console.error("Failed to save coordinates:", error);
+    toast.add({
+      title:
+        error.response?.data?.message ||
+        "Failed to save coordinates. Please try again.",
       color: "error",
     });
   }
