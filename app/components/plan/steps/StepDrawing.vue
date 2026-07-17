@@ -27,8 +27,48 @@
           ]"
         >
           <div ref="mapEl" class="w-full h-full" />
-          <!-- Map controls: base layer toggle + fullscreen -->
+          <!-- Map controls: rotation + base layer toggle + fullscreen -->
           <div class="absolute top-2 right-2 z-[1000] flex items-center gap-2">
+            <div
+              v-if="latLngs.length"
+              class="inline-flex items-center rounded-md overflow-hidden shadow border border-gray-200 dark:border-slate-700 backdrop-blur bg-white/90 dark:bg-slate-800/90"
+              role="group"
+              aria-label="Rotate map"
+            >
+              <button
+                type="button"
+                class="px-2 py-1.5 text-sm leading-none text-gray-700 dark:text-gray-200 hover:bg-gray-100/60 dark:hover:bg-slate-700/60 focus:outline-none transition-colors"
+                title="Rotate 15° counter-clockwise"
+                aria-label="Rotate counter-clockwise"
+                @click="rotateBy(-15)"
+              >
+                ↺
+              </button>
+              <button
+                type="button"
+                class="px-2 py-1.5 text-xs font-medium leading-none border-l border-r border-gray-200 dark:border-slate-700 focus:outline-none transition-colors"
+                :class="[
+                  bearing === 0
+                    ? 'text-gray-500 dark:text-gray-400 cursor-default'
+                    : 'text-blue-600 dark:text-blue-400 hover:bg-gray-100/60 dark:hover:bg-slate-700/60',
+                ]"
+                :title="bearing === 0 ? 'Aligned to true north' : 'Snap back to true north'"
+                aria-label="Snap to true north"
+                :disabled="bearing === 0"
+                @click="snapToNorth"
+              >
+                N {{ bearing }}°
+              </button>
+              <button
+                type="button"
+                class="px-2 py-1.5 text-sm leading-none text-gray-700 dark:text-gray-200 hover:bg-gray-100/60 dark:hover:bg-slate-700/60 focus:outline-none transition-colors"
+                title="Rotate 15° clockwise"
+                aria-label="Rotate clockwise"
+                @click="rotateBy(15)"
+              >
+                ↻
+              </button>
+            </div>
             <div
               v-if="crsMode === 'geo' && latLngs.length"
               class="inline-flex rounded-md overflow-hidden shadow border border-gray-200 dark:border-slate-700 backdrop-blur bg-white/90 dark:bg-slate-800/90"
@@ -217,6 +257,12 @@ const props = withDefaults(defineProps<{
   // Visibility switches (topographic settings); undefined means visible.
   showBoundary?: boolean;
   showSpotHeights?: boolean;
+  // Route plan-view settings (route surveys). The preview mirrors the DXF
+  // plan view: the corridor edges at ±width/2, chainage labels per station,
+  // and the whole alignment hidden when the plan view is turned off.
+  rightOfWayWidth?: number;
+  showPlanView?: boolean;
+  showChainageLabels?: boolean;
   // Contextual banner shown above the map (e.g. layout generate-mode note).
   notice?: string;
   legs?: Array<{
@@ -234,6 +280,9 @@ const props = withDefaults(defineProps<{
   // absent boolean props default to false in Vue; these must default to visible
   showBoundary: true,
   showSpotHeights: true,
+  showPlanView: true,
+  showChainageLabels: true,
+  rightOfWayWidth: 30,
 });
 const emit = defineEmits(["complete"]);
 
@@ -253,6 +302,9 @@ const heading = computed(() => {
 const emptyMessage = computed(() => {
   switch (props.planType) {
     case "route":
+      if (props.showPlanView === false) {
+        return "Plan view is turned off — the sheet will contain the longitudinal profile only.";
+      }
       return "No stations to plot yet. Add station coordinates in the Route Alignment step.";
     case "topographic":
       if (props.showBoundary === false && props.showSpotHeights === false) {
@@ -285,6 +337,8 @@ const filledRows = (rows?: CoordInput[]) =>
 // Prepare parcel data for rendering all parcels together (for cadastral) or route data (for route surveys)
 const allParcels = computed(() => {
   if (props.planType === "route") {
+    // Plan view off → profile-only sheet, so the preview draws nothing.
+    if (props.showPlanView === false) return [];
     // For route surveys, create a single "route" using all coordinates in sequence
     if (!Array.isArray(props.coordinates)) return [];
 
@@ -559,6 +613,58 @@ const baseLayers = shallowRef<Record<string, any>>({});
 const activeBaseKey = ref<string>("OpenStreetMap");
 const crsMode = ref<"geo" | "simple" | null>(null);
 
+// ---------------------------------------------------------------------------
+// Map rotation (leaflet-rotate). The preview can be turned away from true
+// north for readability; the compass reads the current bearing and snaps back.
+// ---------------------------------------------------------------------------
+// Options merged into every L.map() call. `rotateControl` is off because we
+// render our own overlay buttons; shift+wheel and two-finger twist also rotate.
+const rotateMapOptions = {
+  rotate: true,
+  rotateControl: false,
+  touchRotate: true,
+  shiftKeyRotate: true,
+  bearing: 0,
+} as const;
+
+// Current map bearing in degrees clockwise from north (0 = north up).
+const bearing = ref(0);
+
+// leaflet-rotate's dist bundle is a UMD that reads a global `L`, so the global
+// must be set before the side-effect import runs. Leaflet 1.9 ships UMD only,
+// so the real `L` object comes back as the module's default export.
+async function loadLeaflet() {
+  const leaflet: any = await import("leaflet");
+  const L = leaflet.default ?? leaflet;
+  if (typeof window !== "undefined" && !(window as any).L) {
+    (window as any).L = L;
+  }
+  await import("leaflet-rotate");
+  return L;
+}
+
+// Keep the `bearing` ref in sync with the map and seed it on (re)creation.
+function bindRotate(map: any) {
+  if (!map || typeof map.getBearing !== "function") return;
+  const sync = () => {
+    bearing.value = Math.round(((map.getBearing() % 360) + 360) % 360);
+  };
+  map.on("rotate", sync);
+  sync();
+}
+
+function rotateBy(delta: number) {
+  const map = mapRef.value;
+  if (!map || typeof map.setBearing !== "function") return;
+  map.setBearing(map.getBearing() + delta);
+}
+
+function snapToNorth() {
+  const map = mapRef.value;
+  if (!map || typeof map.setBearing !== "function") return;
+  map.setBearing(0);
+}
+
 // Determine geographic orientation (supports lon/lat or lat/lon). "none" means non-geographic.
 const geoOrientation = computed<"lonlat" | "latlon" | "none">(() => {
   const pts = allRawPoints.value;
@@ -591,6 +697,45 @@ const parcelLatLngs = computed<
       isRoute: (parcel as any).isRoute,
     };
   });
+});
+
+// Right-of-way edges for route plans: the centerline offset by ±width/2,
+// perpendicular to the local direction at each station (mirrors the DXF plan
+// view's corridor). Route coordinates are eastings/northings in metres and
+// render in the simple CRS, so the offset is applied directly in that space.
+const routeRowLatLngs = computed<{
+  left: [number, number][];
+  right: [number, number][];
+} | null>(() => {
+  if (props.planType !== "route" || props.showPlanView === false) return null;
+  const half = (Number(props.rightOfWayWidth) || 0) / 2;
+  if (half <= 0) return null;
+  const parcel = allParcels.value[0];
+  if (!parcel || parcel.points.length < 2) return null;
+
+  const orient = geoOrientation.value;
+  const toLatLng = (x: number, y: number): [number, number] =>
+    orient === "latlon" ? [x, y] : [y, x];
+
+  const build = (sign: 1 | -1): [number, number][] => {
+    const pts = parcel.points;
+    const n = pts.length;
+    const out: [number, number][] = [];
+    for (let i = 0; i < n; i++) {
+      const prev = pts[Math.max(i - 1, 0)]!;
+      const next = pts[Math.min(i + 1, n - 1)]!;
+      const dx = next.x - prev.x;
+      const dy = next.y - prev.y;
+      const len = Math.hypot(dx, dy) || 1;
+      // Unit normal to the local direction (left = (-dy, dx))
+      const nx = (-dy / len) * half * sign;
+      const ny = (dx / len) * half * sign;
+      out.push(toLatLng(pts[i]!.x + nx, pts[i]!.y + ny));
+    }
+    return out;
+  };
+
+  return { left: build(1), right: build(-1) };
 });
 
 // Single array of [lat, lng] pairs for backward compatibility
@@ -693,7 +838,11 @@ const roadsLatLng = computed(() => {
 
 // Map bounds computed from all points with padding
 const bounds = computed(() => {
-  const allPoints = latLngs.value;
+  const allPoints = [...latLngs.value];
+  // Include the corridor edges so a short/narrow route isn't clipped.
+  if (routeRowLatLngs.value) {
+    allPoints.push(...routeRowLatLngs.value.left, ...routeRowLatLngs.value.right);
+  }
   if (!allPoints.length)
     return undefined as unknown as [[number, number], [number, number]];
 
@@ -893,6 +1042,23 @@ function renderLayers() {
     polygonLayers.push(geometryLayer);
   }
 
+  // Route right-of-way edges (corridor at ±width/2 of the centerline)
+  if (routeRowLatLngs.value) {
+    const rowStyle = {
+      color: "#ff1f1f",
+      weight: 1.25,
+      opacity: 0.7,
+      dashArray: "5 4",
+      lineCap: "round",
+      lineJoin: "round",
+      interactive: false,
+    };
+    for (const edge of [routeRowLatLngs.value.left, routeRowLatLngs.value.right]) {
+      const rowLayer = L.polyline(edge, rowStyle).addTo(map);
+      polygonLayers.push(rowLayer);
+    }
+  }
+
   // Boundary outline (topographic perimeter / layout site boundary)
   if (boundaryLatLngs.value.length >= 2) {
     const style = {
@@ -979,18 +1145,24 @@ function renderLayers() {
     iconAnchor: [8, 8],
   });
 
+  // Route station labels are the chainage labels; hide them when the user
+  // turned chainage labels off (the station nodes/ticks still show).
+  const showStationLabels = !(
+    props.planType === "route" && props.showChainageLabels === false
+  );
   for (const p of pointsLatLng.value) {
     const marker = L.marker([p.lat, p.lng], {
       icon: pointIcon,
       interactive: false,
-    })
-      .addTo(map)
-      .bindTooltip(p.label, {
+    }).addTo(map);
+    if (showStationLabels) {
+      marker.bindTooltip(p.label, {
         permanent: true,
         direction: "top",
         className: "leaflet-tooltip point-label",
         offset: [0, -8],
       });
+    }
     pointLayers.push(marker);
   }
 
@@ -1228,7 +1400,7 @@ function detachDimensionEvents(map: any) {
 
 onMounted(async () => {
   window.addEventListener("keydown", onKeydown);
-  const L = await import("leaflet");
+  const L = await loadLeaflet();
   LRef.value = L;
   if (!mapEl.value) return;
   // Decide CRS mode based on data
@@ -1239,7 +1411,9 @@ onMounted(async () => {
     zoomControl: true,
     minZoom: crsMode.value === "geo" ? 1 : -5,
     worldCopyJump: crsMode.value === "geo",
+    ...rotateMapOptions,
   });
+  bindRotate(mapRef.value);
   dimensionLayerGroup = L.featureGroup().addTo(mapRef.value);
   attachDimensionEvents(mapRef.value);
   await nextTick();
@@ -1291,6 +1465,15 @@ watch(
   }
 );
 
+// Route plan-view settings change the ROW edges and label visibility without
+// changing the plotted stations, so re-render when they change.
+watch(
+  () => [props.rightOfWayWidth, props.showPlanView, props.showChainageLabels],
+  () => {
+    renderLayers();
+  }
+);
+
 // Switch base layer when toggled
 watch(activeBaseKey, () => applyActiveBase());
 
@@ -1319,7 +1502,9 @@ watch(isGeographic, async (geo) => {
     zoomControl: true,
     minZoom: crsMode.value === "geo" ? 1 : -5,
     worldCopyJump: crsMode.value === "geo",
+    ...rotateMapOptions,
   });
+  bindRotate(mapRef.value);
   dimensionLayerGroup = L.featureGroup().addTo(mapRef.value);
   attachDimensionEvents(mapRef.value);
   await nextTick();

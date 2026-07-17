@@ -165,6 +165,9 @@
             :coordinates="planData.coordinates"
             :parcel-name="planData.basic.name || 'Route'"
             plan-type="route"
+            :right-of-way-width="planData.routeParams.right_of_way_width"
+            :show-plan-view="planData.routeParams.show_plan_view"
+            :show-chainage-labels="planData.routeParams.show_chainage_labels"
             @complete="completeDrawing"
           />
           <!-- Route Step 4: Longitudinal Profile -->
@@ -398,10 +401,8 @@ const planData = reactive({
   longitudinal: {
     horizontal_scale: 1.0,
     vertical_scale: 10,
-    profile_origin: [0.0, 0.0] as [number, number],
     station_interval: 10,
     elevation_interval: 1,
-    starting_chainage: 0.0,
   },
   drawing: { file: null as File | null, fileName: "" },
   routeParams: {
@@ -629,12 +630,8 @@ const fetchPlan = async (skipNavigation = false) => {
         planData.longitudinal = {
           horizontal_scale: lpp.horizontal_scale ?? 1.0,
           vertical_scale: lpp.vertical_scale ?? 10,
-          profile_origin: Array.isArray(lpp.profile_origin)
-            ? [lpp.profile_origin[0] ?? 0, lpp.profile_origin[1] ?? 0]
-            : [0, 0],
           station_interval: lpp.station_interval ?? 10,
           elevation_interval: lpp.elevation_interval ?? 1,
-          starting_chainage: lpp.starting_chainage ?? 0.0,
         };
       }
 
@@ -1082,10 +1079,8 @@ type LongitudinalUpdate = {
   params: {
     horizontal_scale: number;
     vertical_scale: number;
-    profile_origin: [number, number];
     station_interval: number;
     elevation_interval: number;
-    starting_chainage: number;
   };
 };
 type DrawingUpdate = { drawing: Record<string, any> };

@@ -53,38 +53,6 @@
         </div>
       </div>
 
-      <!-- Profile Origin -->
-      <div>
-        <label
-          class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1"
-        >
-          Profile Origin (X, Y)
-          <InfoTip text="Drawing coordinates where the profile grid starts. Leave at (0, 0) unless composing several profiles on one sheet." />
-        </label>
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <input
-              v-model.number="local.params.profile_origin[0]"
-              type="number"
-              step="0.1"
-              class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              placeholder="X (0.0)"
-            />
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">X coordinate</p>
-          </div>
-          <div>
-            <input
-              v-model.number="local.params.profile_origin[1]"
-              type="number"
-              step="0.1"
-              class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              placeholder="Y (0.0)"
-            />
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Y coordinate</p>
-          </div>
-        </div>
-      </div>
-
       <!-- Intervals -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
@@ -128,26 +96,6 @@
         </div>
       </div>
 
-      <!-- Starting Chainage -->
-      <div>
-        <label
-          class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
-        >
-          Starting Chainage (m)
-          <InfoTip text="Chainage of your first station — usually 0 unless this profile continues from a previous section." />
-        </label>
-        <input
-          v-model.number="local.params.starting_chainage"
-          type="number"
-          step="1"
-          min="0"
-          class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-          placeholder="0.0"
-        />
-        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-          Initial chainage value for the profile
-        </p>
-      </div>
     </div>
 
     <!-- Actions -->
@@ -171,10 +119,8 @@ import { useRoute } from "vue-router";
 interface LongitudinalParams {
   horizontal_scale: number;
   vertical_scale: number;
-  profile_origin: [number, number];
   station_interval: number;
   elevation_interval: number;
-  starting_chainage: number;
 }
 
 interface LongitudinalData {
@@ -204,11 +150,8 @@ const isValid = computed(() => {
   return (
     p.horizontal_scale > 0 &&
     p.vertical_scale > 0 &&
-    Array.isArray(p.profile_origin) &&
-    p.profile_origin.length === 2 &&
     p.station_interval > 0 &&
-    p.elevation_interval > 0 &&
-    p.starting_chainage >= 0
+    p.elevation_interval > 0
   );
 });
 
@@ -234,12 +177,8 @@ onMounted(async () => {
         local.params = {
           horizontal_scale: params.horizontal_scale ?? 1.0,
           vertical_scale: params.vertical_scale ?? 10,
-          profile_origin: Array.isArray(params.profile_origin)
-            ? [params.profile_origin[0] ?? 0, params.profile_origin[1] ?? 0]
-            : [0, 0],
           station_interval: params.station_interval ?? 10,
           elevation_interval: params.elevation_interval ?? 1,
-          starting_chainage: params.starting_chainage ?? 0.0,
         };
       }
     }
@@ -261,10 +200,8 @@ async function saveAndContinue() {
     const payload = {
       horizontal_scale: local.params.horizontal_scale,
       vertical_scale: local.params.vertical_scale,
-      profile_origin: local.params.profile_origin,
       station_interval: local.params.station_interval,
       elevation_interval: local.params.elevation_interval,
-      starting_chainage: local.params.starting_chainage,
     };
 
     // Save longitudinal profile parameters to API

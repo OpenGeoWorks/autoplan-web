@@ -261,22 +261,12 @@
             <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.longitudinalParams?.vertical_scale ?? '—' }}</span>
           </div>
           <div>
-            <span class="text-gray-500 dark:text-gray-400">Profile Origin:</span>
-            <span class="ml-2 text-gray-800 dark:text-gray-100">
-              {{ formatProfileOrigin(props.longitudinalParams?.profile_origin) }}
-            </span>
-          </div>
-          <div>
             <span class="text-gray-500 dark:text-gray-400">Station Interval:</span>
             <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.longitudinalParams?.station_interval ?? '—' }} m</span>
           </div>
           <div>
             <span class="text-gray-500 dark:text-gray-400">Elevation Interval:</span>
             <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.longitudinalParams?.elevation_interval ?? '—' }} m</span>
-          </div>
-          <div>
-            <span class="text-gray-500 dark:text-gray-400">Starting Chainage:</span>
-            <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.longitudinalParams?.starting_chainage ?? '—' }} m</span>
           </div>
         </div>
       </div>
@@ -557,10 +547,5 @@ function formatBool(v: boolean | null | undefined) {
   if (v === true) return "Yes";
   if (v === false) return "No";
   return "—";
-}
-
-function formatProfileOrigin(origin: any) {
-  if (!origin || !Array.isArray(origin)) return "—";
-  return `(${origin[0] ?? 0}, ${origin[1] ?? 0})`;
 }
 </script>
