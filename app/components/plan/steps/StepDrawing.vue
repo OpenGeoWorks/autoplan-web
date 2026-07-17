@@ -127,7 +127,7 @@ type DimensionDatum = {
 };
 
 // Keep modelValue in props to avoid extraneous-attrs warnings from parent, but unused here.
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   modelValue?: any;
   coordinates?: CoordInput[];
   parcelName?: string;
@@ -155,7 +155,11 @@ const props = defineProps<{
       seconds?: number;
     };
   }>;
-}>();
+}>(), {
+  // absent boolean props default to false in Vue; these must default to visible
+  showBoundary: true,
+  showSpotHeights: true,
+});
 const emit = defineEmits(["complete"]);
 
 const heading = computed(() => {

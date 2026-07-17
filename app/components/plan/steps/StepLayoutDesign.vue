@@ -208,6 +208,12 @@
 
     <!-- ===================== DRAW MODE ===================== -->
     <template v-else>
+      <!-- One shared datalist keeps corner-id suggestions cheap even with
+           hundreds of corners (a <select> per cell was rendering
+           corners × plot-corner cells option nodes and froze the page). -->
+      <datalist id="layout-corner-ids">
+        <option v-for="opt in registerIds" :key="opt" :value="opt" />
+      </datalist>
       <!-- Corner register -->
       <div
         class="bg-gray-50 dark:bg-slate-900/40 rounded-md border border-gray-200 dark:border-slate-700 p-4 space-y-3"
@@ -312,10 +318,7 @@
                 <td class="px-3 py-1.5">
                   <div class="flex flex-wrap items-center gap-1 max-w-xl">
                     <span v-for="(pid, i) in plot.ids" :key="`${plot._key}-${i}`" class="flex items-center gap-0.5">
-                      <select v-model="plot.ids[i]" class="w-24 cell-input">
-                        <option value="">--</option>
-                        <option v-for="opt in registerIds" :key="opt" :value="opt">{{ opt }}</option>
-                      </select>
+                      <input v-model="plot.ids[i]" list="layout-corner-ids" placeholder="--" class="w-24 cell-input" />
                       <button
                         v-if="plot.ids.length > 1"
                         @click="plot.ids.splice(i, 1)"
@@ -392,10 +395,7 @@
                 <td class="px-3 py-1.5">
                   <div class="flex flex-wrap items-center gap-1 max-w-xl">
                     <span v-for="(rid, i) in road.ids" :key="`${road._key}-${i}`" class="flex items-center gap-0.5">
-                      <select v-model="road.ids[i]" class="w-24 cell-input">
-                        <option value="">--</option>
-                        <option v-for="opt in registerIds" :key="opt" :value="opt">{{ opt }}</option>
-                      </select>
+                      <input v-model="road.ids[i]" list="layout-corner-ids" placeholder="--" class="w-24 cell-input" />
                       <button
                         v-if="road.ids.length > 1"
                         @click="road.ids.splice(i, 1)"
@@ -505,9 +505,22 @@ const facilitiesText = computed({
   },
 });
 
+// Cloning the whole dataset on every keystroke freezes the page for large
+// layouts, so sync to the parent on a short debounce instead.
+let emitTimer: ReturnType<typeof setTimeout> | null = null;
+function flushModelEmit() {
+  if (emitTimer) {
+    clearTimeout(emitTimer);
+    emitTimer = null;
+  }
+  emit("update:model-value", JSON.parse(JSON.stringify(local)));
+}
 watch(
   () => local,
-  () => emit("update:model-value", JSON.parse(JSON.stringify(local))),
+  () => {
+    if (emitTimer) clearTimeout(emitTimer);
+    emitTimer = setTimeout(flushModelEmit, 400);
+  },
   { deep: true }
 );
 
@@ -732,6 +745,7 @@ function addRoad() {
 
 async function saveAndContinue() {
   if (!isValid.value || loading.value) return;
+  flushModelEmit(); // make sure the parent has the latest data before moving on
   const planId = route.params.plan as string;
   const { $axios } = useNuxtApp();
 
