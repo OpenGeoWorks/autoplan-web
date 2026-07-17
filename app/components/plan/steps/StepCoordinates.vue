@@ -191,7 +191,10 @@
         Save & Continue
       </button>
     </div>
-    <p class="text-[11px] text-gray-500 dark:text-gray-400">
+    <p
+      v-if="props.planType !== 'topographic'"
+      class="text-[11px] text-gray-500 dark:text-gray-400"
+    >
       Add at least one coordinate to proceed.
     </p>
   </div>
@@ -345,14 +348,14 @@ function confirmClear() {
   local.coordinates = [];
 }
 function onComplete() {
-  if (local.coordinates.length) {
+  // Topographic plans may save the perimeter survey step without any coordinates.
+  if (local.coordinates.length || props.planType === "topographic") {
     emit("update:modelValue", { coordinates: [...local.coordinates] });
     emit("complete");
     return;
   }
 
-  // Coordinates are now required for all plan types including topographic
-  // Otherwise, do nothing (button should be disabled)
+  // Other plan types require at least one coordinate (button stays disabled).
   return;
 }
 
