@@ -46,7 +46,7 @@
         <!-- Summary Info -->
         <div
           v-if="traverseInfo"
-          class="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4"
+          class="mb-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4"
         >
           <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
             <div class="text-sm font-medium text-blue-600 dark:text-blue-400">
@@ -68,12 +68,22 @@
           </div>
           <div class="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg">
             <div class="text-sm font-medium text-amber-600 dark:text-amber-400">
-              Closure Error
+              Sum of Northings (ΣΔN)
             </div>
             <div
               class="text-lg font-semibold text-amber-900 dark:text-amber-100"
             >
-              {{ traverseInfo.closureError }} m
+              {{ traverseInfo.sumNorthings }} m
+            </div>
+          </div>
+          <div class="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+            <div class="text-sm font-medium text-purple-600 dark:text-purple-400">
+              Sum of Eastings (ΣΔE)
+            </div>
+            <div
+              class="text-lg font-semibold text-purple-900 dark:text-purple-100"
+            >
+              {{ traverseInfo.sumEastings }} m
             </div>
           </div>
         </div>
@@ -565,7 +575,6 @@ const traverseInfo = computed(() => {
     return sum + (isNaN(distance) ? 0 : distance);
   }, 0);
 
-  // Calculate closure error from sum of all delta values
   const sumNorthings = legs.reduce((sum, leg) => {
     const delta = leg.delta_northing;
     return sum + (isNaN(delta) ? 0 : delta);
@@ -576,14 +585,11 @@ const traverseInfo = computed(() => {
     return sum + (isNaN(delta) ? 0 : delta);
   }, 0);
 
-  const closureError = Math.sqrt(
-    Math.pow(sumNorthings, 2) + Math.pow(sumEastings, 2)
-  );
-
   return {
     totalDistance: safeFixed(totalDistance, 3),
     stations: legs.length,
-    closureError: safeFixed(closureError, 6),
+    sumNorthings: safeFixed(sumNorthings, 6),
+    sumEastings: safeFixed(sumEastings, 6),
   };
 });
 
