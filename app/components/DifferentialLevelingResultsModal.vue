@@ -82,15 +82,15 @@
 
           <div class="bg-gray-50 dark:bg-slate-700 p-4 rounded border border-gray-200 dark:border-slate-600">
             <h4 class="font-medium text-gray-800 dark:text-gray-300 text-sm mb-2">
-              Misclosure
+              Closure Check
             </h4>
             <div class="space-y-1 text-xs">
               <div class="flex justify-between">
-                <span class="text-gray-600 dark:text-gray-400">Closing error:</span>
+                <span class="text-gray-600 dark:text-gray-400">Misclosure:</span>
                 <span class="font-mono text-gray-900 dark:text-gray-100">{{ summary.misclosure.toFixed(3) }} m</span>
               </div>
               <div class="flex justify-between">
-                <span class="text-gray-600 dark:text-gray-400">Instrument setups:</span>
+                <span class="text-gray-600 dark:text-gray-400">Number of networks:</span>
                 <span class="font-mono text-gray-900 dark:text-gray-100">{{ summary.setups }}</span>
               </div>
             </div>
