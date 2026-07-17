@@ -126,7 +126,8 @@
                 <th v-if="method === 'height-of-instrument'" class="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-slate-600">Height of Inst. (m)</th>
                 <th v-else class="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-slate-600">Rise (m)</th>
                 <th v-if="method === 'rise-and-fall'" class="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-slate-600">Fall (m)</th>
-                <th v-if="hasCorrection" class="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-slate-600">Correction (m)</th>
+                <th class="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-slate-600">Correction (m)</th>
+                <th class="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-slate-600">Uncorrected RL (m)</th>
                 <th class="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-300">Reduced Level (m)</th>
               </tr>
             </thead>
@@ -143,8 +144,9 @@
                 <td v-if="method === 'height-of-instrument'" class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ fmt(s.height_of_instrument) }}</td>
                 <td v-else class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ fmt(s.rise) }}</td>
                 <td v-if="method === 'rise-and-fall'" class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ fmt(s.fall) }}</td>
-                <td v-if="hasCorrection" class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ fmt(s.correction) }}</td>
-                <td class="px-3 py-2 text-right font-mono font-semibold text-gray-900 dark:text-gray-100">{{ fmt(s.reduced_level) }}</td>
+                <td class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ fmt(s.correction) }}</td>
+                <td class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ fmt(s.uncorrected_reduced_level) }}</td>
+                <td class="px-3 py-2 text-right font-mono font-semibold text-red-600 dark:text-red-400">{{ fmt(s.reduced_level) }}</td>
               </tr>
             </tbody>
           </table>
@@ -191,6 +193,7 @@ interface Station {
   rise?: number;
   fall?: number;
   correction?: number;
+  uncorrected_reduced_level?: number;
   reduced_level?: number;
 }
 
@@ -216,12 +219,6 @@ const fmt = (v: number | undefined | null): string => {
 
 const stations = computed(() => props.results?.stations ?? []);
 
-const hasCorrection = computed(() =>
-  stations.value.some(
-    (s) => typeof s.correction === "number" && s.correction !== 0
-  )
-);
-
 const summary = computed(() => {
   const list = stations.value;
   if (!list.length) return null;
@@ -235,15 +232,13 @@ const summary = computed(() => {
     (sum, s) => sum + (typeof s.fore_sight === "number" ? s.fore_sight : 0),
     0
   );
-  const firstRL = list[0]?.reduced_level ?? 0;
-  const lastStation = list[list.length - 1];
   // The arithmetic check (ΣBS − ΣFS = Last RL − First RL) holds for the raw
-  // reduction. When misclosure correction is applied the final RLs are shifted,
-  // so compare against the pre-correction RL by removing the last correction
-  // (which carries the full distributed misclosure).
-  const lastCorrection =
-    typeof lastStation?.correction === "number" ? lastStation.correction : 0;
-  const lastRL = (lastStation?.reduced_level ?? 0) - lastCorrection;
+  // reduction, so it runs on the uncorrected levels — applying the misclosure
+  // correction shifts the final RLs and would break the check.
+  const rawRL = (s: Station | undefined) =>
+    s?.uncorrected_reduced_level ?? s?.reduced_level ?? 0;
+  const firstRL = rawRL(list[0]);
+  const lastRL = rawRL(list[list.length - 1]);
   const sightDiff = round3(totalBS - totalFS);
   const rlDiff = round3(lastRL - firstRL);
 
@@ -268,8 +263,7 @@ const exportToCSV = () => {
   } else {
     headers.push("Rise(m)", "Fall(m)");
   }
-  if (hasCorrection.value) headers.push("Correction(m)");
-  headers.push("Reduced Level(m)");
+  headers.push("Correction(m)", "Uncorrected Reduced Level(m)", "Reduced Level(m)");
 
   const rows = list.map((s) => {
     const cols = [s.stn, fmt(s.back_sight), fmt(s.intermediate_sight), fmt(s.fore_sight)];
@@ -278,8 +272,11 @@ const exportToCSV = () => {
     } else {
       cols.push(fmt(s.rise), fmt(s.fall));
     }
-    if (hasCorrection.value) cols.push(fmt(s.correction));
-    cols.push(fmt(s.reduced_level));
+    cols.push(
+      fmt(s.correction),
+      fmt(s.uncorrected_reduced_level),
+      fmt(s.reduced_level)
+    );
     return cols.join(",");
   });
 
