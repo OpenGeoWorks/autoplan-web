@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-6">
     <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
-      {{ props.planType === "route" ? "Route Drawing" : "Drawing" }}
+      {{ heading }}
     </h2>
 
     <!-- Leaflet map with base-layer switch (auto: WebMercator tiles if geographic, else CRS.Simple) -->
@@ -56,7 +56,7 @@
             v-if="!latLngs.length"
             class="absolute inset-0 grid place-items-center text-sm text-gray-400"
           >
-            No coordinates to plot yet. Add coordinates in Step 1.
+            {{ emptyMessage }}
           </div>
         </div>
       </ClientOnly>
@@ -107,6 +107,12 @@ const props = defineProps<{
   parcelName?: string;
   parcels?: Array<{ name?: string; ids?: string[] }>;
   planType?: string; // Add plan type prop
+  // Closed outline drawn behind everything else (topographic perimeter /
+  // layout site boundary).
+  boundary?: CoordInput[];
+  // Layout road centerlines; ids reference the corner register passed via
+  // `coordinates`.
+  roads?: Array<{ name?: string; width?: number | null; ids?: string[] }>;
   legs?: Array<{
     from: { id: string; northing: number; easting: number };
     to: { id: string; northing: number; easting: number };
@@ -120,6 +126,37 @@ const props = defineProps<{
   }>;
 }>();
 const emit = defineEmits(["complete"]);
+
+const heading = computed(() => {
+  switch (props.planType) {
+    case "route":
+      return "Route Drawing";
+    case "topographic":
+      return "Topographic Drawing";
+    case "layout":
+      return "Layout Drawing";
+    default:
+      return "Drawing";
+  }
+});
+
+const emptyMessage = computed(() => {
+  switch (props.planType) {
+    case "route":
+      return "No stations to plot yet. Add station coordinates in the Route Alignment step.";
+    case "topographic":
+      return "Nothing to plot yet. Add perimeter and spot-height points in the earlier steps.";
+    case "layout":
+      return "Nothing to plot yet. Add a site boundary and layout design in the earlier steps.";
+    default:
+      return "No coordinates to plot yet. Add coordinates in Step 1.";
+  }
+});
+
+const filledRows = (rows?: CoordInput[]) =>
+  (Array.isArray(rows) ? rows : []).filter(
+    (r) => r.point && r.northing != null && r.easting != null
+  );
 
 // Prepare parcel data for rendering all parcels together (for cadastral) or route data (for route surveys)
 const allParcels = computed(() => {
@@ -197,12 +234,82 @@ const allParcels = computed(() => {
   }>;
 });
 
+// Boundary outline points (topographic perimeter / layout site boundary)
+const boundaryPoints = computed(() => {
+  const rows = filledRows(props.boundary);
+  const points = rows.map((r, i) => ({
+    key: `boundary-${r.point}-${i}`,
+    label: r.point || "",
+    x: Number(r.easting),
+    y: Number(r.northing),
+  }));
+  // polygon closes itself; drop an explicit closing point
+  if (
+    points.length > 1 &&
+    points[0]!.label === points[points.length - 1]!.label
+  ) {
+    points.pop();
+  }
+  return points;
+});
+
+// Spot heights (topographic): the coordinates prop carries the topo points
+const spotPoints = computed(() => {
+  if (props.planType !== "topographic") return [];
+  return filledRows(props.coordinates).map((r, i) => ({
+    key: `spot-${r.point}-${i}`,
+    label: r.point || "",
+    x: Number(r.easting),
+    y: Number(r.northing),
+    elevation:
+      r.elevation != null && Number.isFinite(Number(r.elevation))
+        ? Number(r.elevation)
+        : null,
+  }));
+});
+
+// Road centerlines (layout): ids reference the corner register in coordinates
+const roadLines = computed(() => {
+  if (props.planType !== "layout" || !Array.isArray(props.roads)) return [];
+  const coordMap = new Map<string, CoordInput>();
+  for (const r of filledRows(props.coordinates)) coordMap.set(r.point, r);
+  return props.roads
+    .map((road, i) => {
+      const points = (road.ids || [])
+        .filter(Boolean)
+        .map((id, j) => {
+          const r = coordMap.get(id);
+          if (!r) return null;
+          return {
+            key: `road-${i}-${j}`,
+            label: id,
+            x: Number(r.easting),
+            y: Number(r.northing),
+          };
+        })
+        .filter(
+          (p): p is { key: string; label: string; x: number; y: number } => !!p
+        );
+      if (points.length < 2) return null;
+      return { name: road.name || "", points };
+    })
+    .filter(Boolean) as Array<{
+    name: string;
+    points: Array<{ key: string; label: string; x: number; y: number }>;
+  }>;
+});
+
 // Get all raw points to determine bounds and geographic orientation
 const allRawPoints = computed(() => {
   const points: Array<{ key: string; label: string; x: number; y: number }> =
     [];
   allParcels.value.forEach((parcel) => {
     parcel.points.forEach((point) => points.push(point));
+  });
+  boundaryPoints.value.forEach((point) => points.push(point));
+  spotPoints.value.forEach((point) => points.push(point));
+  roadLines.value.forEach((road) => {
+    road.points.forEach((point) => points.push(point));
   });
   return points;
 });
@@ -266,15 +373,64 @@ const latLngs = computed<[number, number][]>(() => {
   });
 });
 
+// Points that receive the square beacon marker + permanent label. For layout
+// plans the plot corners are too dense to label, so only boundary points get
+// markers; topographic plans label the perimeter beacons (spot heights get
+// their own smaller markers).
+const markerSourcePoints = computed(() => {
+  if (props.planType === "topographic" || props.planType === "layout") {
+    return boundaryPoints.value;
+  }
+  const points: Array<{ key: string; label: string; x: number; y: number }> =
+    [];
+  allParcels.value.forEach((parcel) => {
+    parcel.points.forEach((point) => points.push(point));
+  });
+  return points;
+});
+
 // Points mapped to lat/lng for markers with labels
 const pointsLatLng = computed(() =>
-  allRawPoints.value.map((p) => {
+  markerSourcePoints.value.map((p) => {
     const orient = geoOrientation.value;
     return orient === "latlon"
       ? { key: p.key, label: p.label, lat: p.x, lng: p.y }
       : { key: p.key, label: p.label, lat: p.y, lng: p.x };
   })
 );
+
+// Boundary outline as [lat, lng] pairs
+const boundaryLatLngs = computed<[number, number][]>(() => {
+  const orient = geoOrientation.value;
+  return boundaryPoints.value.map((p) =>
+    orient === "latlon"
+      ? ([p.x, p.y] as [number, number])
+      : ([p.y, p.x] as [number, number])
+  );
+});
+
+// Spot heights mapped to lat/lng with elevation labels
+const spotsLatLng = computed(() =>
+  spotPoints.value.map((p) => {
+    const orient = geoOrientation.value;
+    return orient === "latlon"
+      ? { ...p, lat: p.x, lng: p.y }
+      : { ...p, lat: p.y, lng: p.x };
+  })
+);
+
+// Road centerlines mapped to [lat, lng] pairs
+const roadsLatLng = computed(() => {
+  const orient = geoOrientation.value;
+  return roadLines.value.map((road) => ({
+    name: road.name,
+    points: road.points.map((p) =>
+      orient === "latlon"
+        ? ([p.x, p.y] as [number, number])
+        : ([p.y, p.x] as [number, number])
+    ),
+  }));
+});
 
 // Map bounds computed from all points with padding
 const bounds = computed(() => {
@@ -462,11 +618,11 @@ function renderLayers() {
         interactive: false,
       }).addTo(map);
     } else {
-      // For cadastral surveys, draw a polygon (only if we have at least 3 points)
+      // For cadastral parcels / layout plots, draw a polygon (only if we have at least 3 points)
       if (parcel.points.length < 3) continue;
       geometryLayer = L.polygon(parcel.points, {
         color: "#ff1f1f",
-        weight: 2.5,
+        weight: props.planType === "layout" ? 1.5 : 2.5,
         fill: false,
         opacity: 0.95,
         lineCap: "round",
@@ -476,6 +632,84 @@ function renderLayers() {
     }
 
     polygonLayers.push(geometryLayer);
+  }
+
+  // Boundary outline (topographic perimeter / layout site boundary)
+  if (boundaryLatLngs.value.length >= 2) {
+    const style = {
+      color: "#2563eb",
+      weight: 2,
+      opacity: 0.9,
+      fill: false,
+      dashArray: "6 4",
+      lineCap: "round",
+      lineJoin: "round",
+      interactive: false,
+    };
+    const boundaryLayer =
+      boundaryLatLngs.value.length >= 3
+        ? L.polygon(boundaryLatLngs.value, style)
+        : L.polyline(boundaryLatLngs.value, style);
+    boundaryLayer.addTo(map);
+    polygonLayers.push(boundaryLayer);
+  }
+
+  // Road centerlines (layout)
+  for (const road of roadsLatLng.value) {
+    const line = L.polyline(road.points, {
+      color: "#6b7280",
+      weight: 3,
+      opacity: 0.9,
+      lineCap: "round",
+      lineJoin: "round",
+      interactive: false,
+    }).addTo(map);
+    polygonLayers.push(line);
+
+    if (road.name) {
+      const mid = road.points[Math.floor(road.points.length / 2)]!;
+      const marker = L.marker(mid, {
+        icon: L.divIcon({
+          className: "empty-icon",
+          html: "",
+          iconSize: [0, 0],
+        }),
+        interactive: false,
+      })
+        .addTo(map)
+        .bindTooltip(road.name, {
+          permanent: true,
+          direction: "center",
+          className: "leaflet-tooltip road-label",
+        });
+      centroidMarkers.push(marker);
+    }
+  }
+
+  // Spot heights (topographic): small dot labelled with id + elevation
+  const spotIcon = L.divIcon({
+    className: "spot-node-icon",
+    html: '<div class="spot-node"></div>',
+    iconSize: [8, 8],
+    iconAnchor: [4, 4],
+  });
+  for (const p of spotsLatLng.value) {
+    const label =
+      p.elevation != null
+        ? `${p.label}<div class="spot-elev">${p.elevation.toFixed(2)}</div>`
+        : p.label;
+    const marker = L.marker([p.lat, p.lng], {
+      icon: spotIcon,
+      interactive: false,
+    })
+      .addTo(map)
+      .bindTooltip(label, {
+        permanent: true,
+        direction: "top",
+        className: "leaflet-tooltip spot-label",
+        offset: [0, -4],
+      });
+    pointLayers.push(marker);
   }
 
   // Points + labels (respect orientation)
@@ -878,6 +1112,53 @@ function onComplete() {
 
 :deep(.leaflet-tooltip.point-label.leaflet-tooltip-top:before) {
   display: none;
+}
+
+:deep(.spot-node-icon) {
+  background: transparent;
+  border: none;
+}
+
+:deep(.spot-node) {
+  width: 7px;
+  height: 7px;
+  background: #000;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+:deep(.leaflet-tooltip.spot-label) {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: #000;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.15;
+  text-align: center;
+  text-shadow: 1px 1px 0 white, -1px -1px 0 white, 1px -1px 0 white,
+    -1px 1px 0 white;
+}
+
+:deep(.leaflet-tooltip.spot-label .spot-elev) {
+  font-size: 10px;
+  color: #374151;
+}
+
+:deep(.leaflet-tooltip.spot-label.leaflet-tooltip-top:before) {
+  display: none;
+}
+
+:deep(.leaflet-tooltip.road-label) {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: #374151;
+  font-weight: 600;
+  font-size: 12px;
+  text-shadow: 1px 1px 0 white, -1px -1px 0 white, 1px -1px 0 white,
+    -1px 1px 0 white;
 }
 
 :deep(.dimension-label) {
