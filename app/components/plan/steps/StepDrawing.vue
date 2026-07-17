@@ -83,6 +83,80 @@
       </ClientOnly>
     </div>
 
+    <!-- Boundary back computation (topographic perimeter / layout site boundary) -->
+    <div v-if="showBoundaryComputation" class="space-y-3">
+      <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+        Boundary Back Computation
+      </h3>
+      <div v-if="boundaryComputationLoading" class="animate-pulse space-y-3">
+        <div class="h-4 bg-gray-200 dark:bg-slate-700 rounded w-1/3"></div>
+        <div class="h-8 bg-gray-200 dark:bg-slate-700 rounded w-full"></div>
+        <div class="h-8 bg-gray-200 dark:bg-slate-700 rounded w-full"></div>
+      </div>
+      <div
+        v-else-if="boundaryComputationError"
+        class="text-sm text-red-600 dark:text-red-400"
+      >
+        Failed to compute boundary distances and bearings.
+      </div>
+      <template v-else-if="boundaryLegs.length">
+        <div
+          class="overflow-x-auto border border-gray-200 dark:border-slate-700 rounded"
+        >
+          <table class="w-full text-sm table-auto border-collapse">
+            <thead>
+              <tr
+                class="text-left bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700"
+              >
+                <th class="px-2 py-1">Distance (m)</th>
+                <th class="px-2 py-1">Bearing</th>
+                <th class="px-2 py-1">Departure</th>
+                <th class="px-2 py-1">Latitude</th>
+                <th class="px-2 py-1">Easting (mE)</th>
+                <th class="px-2 py-1">Northing (mN)</th>
+                <th class="px-2 py-1">ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="px-2 py-1"></td>
+                <td class="px-2 py-1"></td>
+                <td class="px-2 py-1"></td>
+                <td class="px-2 py-1"></td>
+                <td class="px-2 py-1">{{ boundaryLegs[0].from.easting }}</td>
+                <td class="px-2 py-1">{{ boundaryLegs[0].from.northing }}</td>
+                <td class="px-2 py-1">{{ boundaryLegs[0].from.id }}</td>
+              </tr>
+              <tr
+                v-for="(leg, i) in boundaryLegs"
+                :key="i"
+                class="border-t border-gray-100 dark:border-slate-700/60"
+              >
+                <td class="px-2 py-1">{{ leg.distance }}</td>
+                <td class="px-2 py-1">
+                  {{ formatBearing(leg.bearing?.decimal) }}
+                </td>
+                <td class="px-2 py-1">{{ leg.delta_easting }}</td>
+                <td class="px-2 py-1">{{ leg.delta_northing }}</td>
+                <td class="px-2 py-1">{{ leg.to.easting }}</td>
+                <td class="px-2 py-1">{{ leg.to.northing }}</td>
+                <td class="px-2 py-1">{{ leg.to.id }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="text-sm text-gray-700 dark:text-gray-300 space-y-1">
+          <div>
+            <strong>Total distance:</strong>
+            {{ boundaryTraverse?.total_distance }} m
+          </div>
+          <div v-if="boundaryTraverse?.area">
+            <strong>Area:</strong> {{ formatArea(boundaryTraverse.area) }}
+          </div>
+        </div>
+      </template>
+    </div>
+
     <div class="flex justify-end gap-3">
       <button
         @click="onComplete"
@@ -109,6 +183,7 @@ import {
   RiFullscreenExitLine,
   RiInformationLine,
 } from "@remixicon/vue";
+import axios from "axios";
 
 type CoordInput = {
   point: string;
@@ -319,6 +394,111 @@ const spotPoints = computed(() => {
   }));
 });
 
+// ---------------------------------------------------------------------------
+// Boundary back computation (topographic perimeter / layout site boundary):
+// distances, bearings and area from the same endpoint the cadastral flow uses.
+// ---------------------------------------------------------------------------
+const isBoundaryComputationType = computed(
+  () => props.planType === "topographic" || props.planType === "layout"
+);
+const boundaryLegs = ref<any[]>([]);
+const boundaryTraverse = ref<any | null>(null);
+const boundaryComputationLoading = ref(false);
+const boundaryComputationError = ref(false);
+const showBoundaryComputation = computed(
+  () => isBoundaryComputationType.value && boundaryPoints.value.length >= 3
+);
+
+let boundaryFetchTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function fetchBoundaryComputation() {
+  if (import.meta.server) return;
+  if (!showBoundaryComputation.value) {
+    boundaryLegs.value = [];
+    boundaryTraverse.value = null;
+    return;
+  }
+  const points = boundaryPoints.value.map((p) => ({
+    id: p.label,
+    northing: p.y,
+    easting: p.x,
+  }));
+  // close the ring so the endpoint returns the closing leg
+  if (points.length && points[0]!.id !== points[points.length - 1]!.id) {
+    points.push({ ...points[0]! });
+  }
+  try {
+    boundaryComputationLoading.value = true;
+    boundaryComputationError.value = false;
+    const res = await axios.post("/traverse/back-computation", { points });
+    const data = res?.data?.data;
+    boundaryLegs.value = data?.traverse_legs || [];
+    boundaryTraverse.value = data?.traverse || null;
+  } catch {
+    boundaryComputationError.value = true;
+    boundaryLegs.value = [];
+    boundaryTraverse.value = null;
+  } finally {
+    boundaryComputationLoading.value = false;
+  }
+}
+
+watch(
+  () =>
+    isBoundaryComputationType.value
+      ? boundaryPoints.value.map((p) => `${p.label}:${p.x}:${p.y}`).join("|")
+      : "",
+  () => {
+    if (!isBoundaryComputationType.value) return;
+    if (boundaryFetchTimer) clearTimeout(boundaryFetchTimer);
+    boundaryFetchTimer = setTimeout(fetchBoundaryComputation, 300);
+  },
+  { immediate: true }
+);
+
+// Legs feeding the on-map dimension labels: explicit legs from the parent
+// (cadastral) win, otherwise the boundary back-computation legs.
+const dimensionLegs = computed(() => {
+  if (Array.isArray(props.legs) && props.legs.length) return props.legs;
+  return boundaryLegs.value;
+});
+
+function formatBearing(decimalDeg: number | null | undefined) {
+  if (
+    decimalDeg === null ||
+    decimalDeg === undefined ||
+    Number.isNaN(decimalDeg)
+  )
+    return "";
+  const absDeg = Math.abs(decimalDeg);
+  let deg = Math.floor(absDeg);
+  const minutesFloat = (absDeg - deg) * 60;
+  let minutes = Math.floor(minutesFloat);
+  let secondsFloat = Math.round((minutesFloat - minutes) * 60);
+  const sign = decimalDeg < 0 ? "-" : "";
+
+  if (secondsFloat >= 59.9999999999) {
+    secondsFloat = 0;
+    minutes += 1;
+  }
+  if (minutes >= 60) {
+    minutes = 0;
+    deg += 1;
+  }
+
+  const secondsStr = secondsFloat.toFixed(6).replace(/\.?(0+)$/, "");
+  return `${sign}${deg}° ${minutes}' ${secondsStr}"`;
+}
+
+function formatArea(area: number | null | undefined) {
+  if (area === null || area === undefined || Number.isNaN(area)) return "";
+  if (area >= 10000) {
+    const hectares = area / 10000;
+    return `${area.toFixed(3)} sqm (${hectares.toFixed(3)} hectares)`;
+  }
+  return `${area.toFixed(3)} sqm`;
+}
+
 // Road centerlines (layout): ids reference the corner register in coordinates
 const roadLines = computed(() => {
   if (props.planType !== "layout" || !Array.isArray(props.roads)) return [];
@@ -469,6 +649,34 @@ const spotsLatLng = computed(() =>
       : { ...p, lat: p.y, lng: p.x };
   })
 );
+
+// Boundary polygon centroid (orients dimension labels inward/outward)
+const boundaryCentroid = computed<[number, number] | null>(() => {
+  const pts = boundaryLatLngs.value;
+  const n = pts.length;
+  if (n < 3) return null;
+
+  let area2 = 0;
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0; i < n; i++) {
+    const [x0, y0] = [pts[i]![1], pts[i]![0]]; // treat lng=x, lat=y
+    const [x1, y1] = [pts[(i + 1) % n]![1], pts[(i + 1) % n]![0]];
+    const f = x0 * y1 - x1 * y0;
+    area2 += f;
+    cx += (x0 + x1) * f;
+    cy += (y0 + y1) * f;
+  }
+
+  if (area2 === 0) {
+    const s = pts.reduce(
+      (acc, [lat, lng]) => [acc[0] + lat, acc[1] + lng] as [number, number],
+      [0, 0] as [number, number]
+    );
+    return [s[0] / n, s[1] / n];
+  }
+  return [cy / (3 * area2), cx / (3 * area2)];
+});
 
 // Road centerlines mapped to [lat, lng] pairs
 const roadsLatLng = computed(() => {
@@ -805,12 +1013,14 @@ function renderLayers() {
 
   if (dimensionLayerGroup) dimensionLayerGroup.clearLayers();
   dimensionData = [];
-  if (Array.isArray(props.legs) && props.legs.length) {
+  const legsToDraw = dimensionLegs.value;
+  if (Array.isArray(legsToDraw) && legsToDraw.length) {
     const centroidPool = parcelCentroids.value
       .map((parcel) => parcel.position)
       .filter((pos): pos is [number, number] => Array.isArray(pos));
+    if (boundaryCentroid.value) centroidPool.push(boundaryCentroid.value);
 
-    for (const leg of props.legs) {
+    for (const leg of legsToDraw) {
       const from = pointsLatLng.value.find(
         (pp) => pp.label === leg.from.id || pp.key === leg.from.id
       );
@@ -1040,6 +1250,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeydown);
+  if (boundaryFetchTimer) clearTimeout(boundaryFetchTimer);
   const map = mapRef.value;
   teardownBaseLayers();
   if (map) {
@@ -1071,6 +1282,13 @@ watch(
     renderLayers();
   },
   { deep: true }
+);
+
+watch(
+  () => boundaryLegs.value,
+  () => {
+    renderLayers();
+  }
 );
 
 // Switch base layer when toggled
