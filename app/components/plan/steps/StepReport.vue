@@ -232,6 +232,14 @@
               <span class="text-gray-500 dark:text-gray-400">Show contour labels:</span>
               <span class="ml-2 text-gray-800 dark:text-gray-100">{{ formatBool(props.topoSettings?.show_contours_labels) }}</span>
             </div>
+            <div>
+              <span class="text-gray-500 dark:text-gray-400">Show TIN mesh:</span>
+              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ formatBool(props.topoSettings?.show_tin_mesh) }}</span>
+            </div>
+            <div>
+              <span class="text-gray-500 dark:text-gray-400">Show coordinate grid:</span>
+              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ formatBool(props.topoSettings?.show_grid) }}</span>
+            </div>
           </div>
         </div>
 

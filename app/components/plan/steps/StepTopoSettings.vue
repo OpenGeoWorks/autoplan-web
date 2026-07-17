@@ -137,6 +137,31 @@
             </label>
           </div>
         </div>
+
+        <div class="mt-2">
+          <label class="text-xs text-gray-600 mb-1 flex items-center gap-1">Overlays
+            <InfoTip text="Draw these reference layers on the plan. They can also be toggled per layer in CAD." /></label>
+          <div class="flex flex-col gap-2">
+            <label class="flex items-center gap-2">
+              <input
+                type="checkbox"
+                v-model="local.show_tin_mesh"
+                class="form-checkbox h-4 w-4"
+              />
+              <span class="text-sm font-medium flex items-center gap-1">Show TIN mesh
+                <InfoTip text="Draws the triangulated irregular network joining your survey points." /></span>
+            </label>
+            <label class="flex items-center gap-2">
+              <input
+                type="checkbox"
+                v-model="local.show_grid"
+                class="form-checkbox h-4 w-4"
+              />
+              <span class="text-sm font-medium flex items-center gap-1">Show coordinate grid
+                <InfoTip text="Draws a rectangular easting/northing reference grid over the survey extent." /></span>
+            </label>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -211,6 +236,8 @@ const local = reactive<any>({
   show_boundary: true,
   boundary_label_scale: 0.2,
   selected_surface: "",
+  show_tin_mesh: false,
+  show_grid: false,
 });
 
 const submitting = ref(false);
@@ -266,6 +293,8 @@ async function onSave() {
       // map selected_surface back to the original tin/grid booleans
       tin: local.selected_surface === "tin",
       grid: local.selected_surface === "grid",
+      show_tin_mesh: !!local.show_tin_mesh,
+      show_grid: !!local.show_grid,
     };
 
     await axios.put(`/plan/topo/setting/edit/${planId}`, payload);
