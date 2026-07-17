@@ -752,8 +752,12 @@ async function saveAndContinue() {
   try {
     loading.value = true;
 
+    // layout_mode records which design (auto vs manual) the plan uses —
+    // the generator and the map preview follow it, while the other mode's
+    // data stays saved on the plan untouched.
     if (local.mode === "generate") {
       await $axios.put(`/plan/layout/params/edit/${planId}`, {
+        layout_mode: "auto",
         plot: { ...local.params.plot },
         roads: { ...local.params.roads },
         blocks: { ...local.params.blocks },
@@ -762,6 +766,7 @@ async function saveAndContinue() {
       toast.add({ title: "Layout parameters saved", color: "success" });
     } else {
       await $axios.put(`/plan/layout/data/edit/${planId}`, {
+        layout_mode: "manual",
         coordinates: local.corners
           .filter((c) => c.point && c.northing != null && c.easting != null)
           .map((c) => ({ id: c.point, northing: Number(c.northing), easting: Number(c.easting) })),

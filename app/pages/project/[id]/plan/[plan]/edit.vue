@@ -216,10 +216,10 @@
           <!-- Layout Step 3: Drawing (boundary + plots + roads preview) -->
           <StepDrawing
             v-else-if="currentStep === 3"
-            :coordinates="planData.layoutDesign.corners"
+            :coordinates="layoutMapCorners"
             :parcels="layoutPlotParcels"
             :boundary="planData.boundary"
-            :roads="planData.layoutDesign.roads"
+            :roads="layoutMapRoads"
             :notice="layoutDrawingNotice"
             plan-type="layout"
             @complete="completeDrawing"
@@ -478,19 +478,34 @@ const alignmentModel = computed(() => ({
 }));
 const layoutDesignModel = computed(() => planData.layoutDesign);
 
+// The map preview follows the active layout mode: manual ("draw") shows the
+// entered corners/plots/roads; auto ("generate") shows only the boundary,
+// even when manual data also exists on the plan.
+const layoutIsManual = computed(() => planData.layoutDesign.mode === "draw");
+
 // Layout plots mapped into StepDrawing's parcel shape (name + corner ids)
 const layoutPlotParcels = computed(() =>
-  planData.layoutDesign.plots.map((p: any) => ({
-    name: `${p.block ?? ""}${p.number ?? ""}`,
-    ids: Array.isArray(p.ids) ? p.ids.filter(Boolean) : [],
-  }))
+  layoutIsManual.value
+    ? planData.layoutDesign.plots.map((p: any) => ({
+        name: `${p.block ?? ""}${p.number ?? ""}`,
+        ids: Array.isArray(p.ids) ? p.ids.filter(Boolean) : [],
+      }))
+    : []
+);
+
+const layoutMapCorners = computed(() =>
+  layoutIsManual.value ? planData.layoutDesign.corners : []
+);
+
+const layoutMapRoads = computed(() =>
+  layoutIsManual.value ? planData.layoutDesign.roads : []
 );
 
 // Auto-generated subdivisions are designed server-side when the final plan is
 // produced, so there are no plots/roads to preview yet.
 const layoutDrawingNotice = computed(() =>
   planData.layoutDesign.mode === "generate"
-    ? "Auto-generated subdivision: plots and roads are designed when the final plan is generated, so they can't be previewed here yet — only the site boundary is shown. Once the plan has been generated, reopen this page to preview the designed plots."
+    ? "Automated layout selected: plots and roads are designed when the final plan is generated, so only the site boundary is previewed here. Any manually entered layout stays saved — switch back to it in the Layout Design step."
     : undefined
 );
 
@@ -598,7 +613,12 @@ const fetchPlan = async (skipNavigation = false) => {
           width: r.width ?? 9,
           ids: Array.isArray(r.centerline_ids) ? [...r.centerline_ids] : [],
         }));
-        if (planData.layoutDesign.plots.length) {
+        // The saved layout_mode decides which design is active; legacy
+        // plans without it fall back to inferring from the manual data.
+        if (data.layout_mode) {
+          planData.layoutDesign.mode =
+            data.layout_mode === "manual" ? "draw" : "generate";
+        } else if (planData.layoutDesign.plots.length) {
           planData.layoutDesign.mode = "draw";
         }
       }
