@@ -512,6 +512,7 @@
     :show="showResultsModal"
     :results="computationResults?.data || null"
     :can-save-coordinates="true"
+    :misclosure-applied="misclosureCorrection"
     @save-coordinates="saveToCoordinates"
     @close="showResultsModal = false"
   />

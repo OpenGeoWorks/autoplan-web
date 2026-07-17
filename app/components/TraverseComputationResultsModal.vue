@@ -219,6 +219,7 @@
                 <!-- First sub-row -->
                 <tr
                   class="border-b border-gray-100 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700"
+                  :class="{ 'text-red-600 dark:text-red-400': leg.fixed }"
                 >
                   <!-- From Station -->
                   <td
@@ -347,26 +348,14 @@
                   <td
                     class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600"
                   >
-                    {{
-                      safeCoordinateFixed(
-                        leg.from.northing,
-                        leg.delta_northing,
-                        3
-                      )
-                    }}
+                    {{ safeFixed(leg.to.uncorrected_northing, 3) }}
                   </td>
 
                   <!-- Uncorrected Easting -->
                   <td
                     class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600"
                   >
-                    {{
-                      safeCoordinateFixed(
-                        leg.from.easting,
-                        leg.delta_easting,
-                        3
-                      )
-                    }}
+                    {{ safeFixed(leg.to.uncorrected_easting, 3) }}
                   </td>
 
                   <!-- To Station -->
@@ -378,6 +367,7 @@
                 <!-- Second sub-row -->
                 <tr
                   class="border-b border-gray-100 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700"
+                  :class="{ 'text-red-600 dark:text-red-400': leg.fixed }"
                 >
                   <!-- Observed Angle -->
                   <td
@@ -416,6 +406,7 @@
                 <!-- Third sub-row -->
                 <tr
                   class="border-b border-gray-100 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700"
+                  :class="{ 'text-red-600 dark:text-red-400': leg.fixed }"
                 >
                   <!-- Forward Bearing -->
                   <td
@@ -430,14 +421,16 @@
 
                   <!-- Final Northing -->
                   <td
-                    class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600 text-red-600 dark:text-red-400"
+                    class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600"
+                    :class="misclosureApplied || leg.fixed ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'"
                   >
                     {{ safeFixed(leg.to.northing, 3) }}
                   </td>
 
                   <!-- Final Easting -->
                   <td
-                    class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600 text-red-600 dark:text-red-400"
+                    class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600"
+                    :class="misclosureApplied || leg.fixed ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'"
                   >
                     {{ safeFixed(leg.to.easting, 3) }}
                   </td>
@@ -484,19 +477,6 @@ function safeFixed(
   return value.toFixed(decimals);
 }
 
-// Helper function to safely format coordinates
-function safeCoordinateFixed(
-  value1: number,
-  value2: number,
-  decimals: number = 3
-): string {
-  const result = value1 + value2;
-  if (isNaN(result)) {
-    return "";
-  }
-  return result.toFixed(decimals);
-}
-
 // Format an area in square metres, adding a hectares equivalent for large areas.
 // Returns an em dash while the value is unavailable (e.g. before the backend supplies it).
 function formatArea(area: number | undefined | null): string {
@@ -516,11 +496,15 @@ interface TraverseResults {
       id: string;
       northing: number;
       easting: number;
+      uncorrected_northing?: number;
+      uncorrected_easting?: number;
     };
     to: {
       id: string;
       northing: number;
       easting: number;
+      uncorrected_northing?: number;
+      uncorrected_easting?: number;
     };
     distance: number;
     bearing: {
@@ -558,6 +542,7 @@ interface TraverseResults {
       seconds: number;
       decimal: number;
     };
+    fixed?: boolean;
   }>;
   // Populated by the backend; may arrive at the top level or nested under `traverse`.
   area?: number;
@@ -570,6 +555,9 @@ const props = defineProps<{
   show: boolean;
   results: TraverseResults | null;
   canSaveCoordinates?: boolean;
+  // When true, the misclosure correction has been applied, so the final
+  // northing/easting coordinates are highlighted in red.
+  misclosureApplied?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -686,8 +674,8 @@ function exportToCSV() {
       leg.delta_easting > 0 ? safeFixed(leg.delta_easting, 3) : "",
       leg.delta_easting < 0 ? safeFixed(Math.abs(leg.delta_easting), 3) : "",
       leg.arithmetic_sum_easting !== undefined ? safeFixed(leg.arithmetic_sum_easting, 3) : safeFixed(Math.abs(leg.delta_easting), 3),
-      safeCoordinateFixed(leg.from.northing, leg.delta_northing, 3),
-      safeCoordinateFixed(leg.from.easting, leg.delta_easting, 3),
+      safeFixed(leg.to.uncorrected_northing, 3),
+      safeFixed(leg.to.uncorrected_easting, 3),
       "", // Correction dN empty in first row
       "", // Correction dE empty in first row  
       "", // Final northing empty in first row

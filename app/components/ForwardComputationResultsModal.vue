@@ -95,8 +95,8 @@
                 <td class="px-3 py-2 border-r border-gray-200 dark:border-slate-600"></td>
                 <td class="px-3 py-2 border-r border-gray-200 dark:border-slate-600"></td>
                 <td class="px-3 py-2 border-r border-gray-200 dark:border-slate-600"></td>
-                <td class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ startInfo.northing }}</td>
-                <td class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ startInfo.easting }}</td>
+                <td class="px-3 py-2 text-right font-mono text-red-600 dark:text-red-400 border-r border-gray-200 dark:border-slate-600">{{ startInfo.northing }}</td>
+                <td class="px-3 py-2 text-right font-mono text-red-600 dark:text-red-400 border-r border-gray-200 dark:border-slate-600">{{ startInfo.easting }}</td>
                 <td class="px-3 py-2 font-medium text-gray-900 dark:text-gray-100">{{ startInfo.id }}</td>
               </tr>
 
@@ -111,8 +111,14 @@
                 <td class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ row.distance }}</td>
                 <td class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ row.deltaN }}</td>
                 <td class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ row.deltaE }}</td>
-                <td class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ row.northing }}</td>
-                <td class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ row.easting }}</td>
+                <td
+                  class="px-3 py-2 text-right font-mono border-r border-gray-200 dark:border-slate-600"
+                  :class="misclosureApplied ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'"
+                >{{ row.northing }}</td>
+                <td
+                  class="px-3 py-2 text-right font-mono border-r border-gray-200 dark:border-slate-600"
+                  :class="misclosureApplied ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'"
+                >{{ row.easting }}</td>
                 <td class="px-3 py-2 font-medium text-gray-900 dark:text-gray-100">{{ row.toStation }}</td>
               </tr>
             </tbody>
@@ -190,6 +196,9 @@ const props = defineProps<{
   show: boolean;
   results: Results | null;
   canSaveCoordinates?: boolean;
+  // When true, the misclosure correction has been applied, so the final
+  // northing/easting coordinates are highlighted in red.
+  misclosureApplied?: boolean;
 }>();
 
 defineEmits<{ close: []; "save-coordinates": [] }>();

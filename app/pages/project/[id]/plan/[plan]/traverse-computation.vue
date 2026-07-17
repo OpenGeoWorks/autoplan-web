@@ -420,6 +420,7 @@
     :show="showResultsModal"
     :results="computationResults?.data || null"
     :can-save-coordinates="true"
+    :misclosure-applied="misclosureCorrection"
     @close="closeModal"
     @save-coordinates="handleSaveCoordinates"
   />

@@ -306,6 +306,7 @@
   <ForwardComputationResultsModal
     :show="showResultsModal"
     :results="computationResults?.data || null"
+    :misclosure-applied="misclosureCorrection"
     @close="showResultsModal = false"
   />
 

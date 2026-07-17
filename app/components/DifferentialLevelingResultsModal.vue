@@ -146,7 +146,10 @@
                 <td v-if="method === 'rise-and-fall'" class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ fmt(s.fall) }}</td>
                 <td class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ fmt(s.correction) }}</td>
                 <td class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ fmt(s.uncorrected_reduced_level) }}</td>
-                <td class="px-3 py-2 text-right font-mono font-semibold text-red-600 dark:text-red-400">{{ fmt(s.reduced_level) }}</td>
+                <td
+                  class="px-3 py-2 text-right font-mono font-semibold"
+                  :class="misclosureCorrected ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'"
+                >{{ fmt(s.reduced_level) }}</td>
               </tr>
             </tbody>
           </table>
@@ -218,6 +221,14 @@ const fmt = (v: number | undefined | null): string => {
 };
 
 const stations = computed(() => props.results?.stations ?? []);
+
+// The misclosure is only "corrected" when a non-zero correction was distributed
+// across the stations, shifting the reduced levels away from their raw values.
+const misclosureCorrected = computed(() =>
+  stations.value.some(
+    (s) => typeof s.correction === "number" && Math.abs(s.correction) > 0
+  )
+);
 
 const summary = computed(() => {
   const list = stations.value;
