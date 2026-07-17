@@ -377,7 +377,7 @@
 
                   <!-- Correction dN -->
                   <td
-                    class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600"
+                    class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600 text-red-600 dark:text-red-400"
                   >
                     {{
                       leg.northing_misclosure !== undefined
@@ -388,7 +388,7 @@
 
                   <!-- Correction dE -->
                   <td
-                    class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600"
+                    class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600 text-red-600 dark:text-red-400"
                   >
                     {{
                       leg.easting_misclosure !== undefined
