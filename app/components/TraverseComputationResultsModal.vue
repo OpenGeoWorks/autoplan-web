@@ -67,23 +67,28 @@
             </div>
           </div>
           <div class="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg">
-            <div class="text-sm font-medium text-amber-600 dark:text-amber-400">
-              Sum of Northings (ΣΔN)
+            <div class="text-sm font-medium text-amber-600 dark:text-amber-400 mb-2">
+              Misclosure
             </div>
-            <div
-              class="text-lg font-semibold text-amber-900 dark:text-amber-100"
-            >
-              {{ traverseInfo.sumNorthings }} m
+            <div class="space-y-1 text-xs">
+              <div class="flex justify-between">
+                <span class="text-amber-700 dark:text-amber-300">Northing:</span>
+                <span class="font-mono text-amber-900 dark:text-amber-100">{{ traverseInfo.northingMisclosure }} m</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-amber-700 dark:text-amber-300">Easting:</span>
+                <span class="font-mono text-amber-900 dark:text-amber-100">{{ traverseInfo.eastingMisclosure }} m</span>
+              </div>
             </div>
           </div>
           <div class="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
             <div class="text-sm font-medium text-purple-600 dark:text-purple-400">
-              Sum of Eastings (ΣΔE)
+              Area
             </div>
             <div
               class="text-lg font-semibold text-purple-900 dark:text-purple-100"
             >
-              {{ traverseInfo.sumEastings }} m
+              {{ traverseInfo.area }}
             </div>
           </div>
         </div>
@@ -387,7 +392,7 @@
 
                   <!-- Correction dN -->
                   <td
-                    class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600 text-red-600 dark:text-red-400"
+                    class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600"
                   >
                     {{
                       leg.northing_misclosure !== undefined
@@ -398,7 +403,7 @@
 
                   <!-- Correction dE -->
                   <td
-                    class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600 text-red-600 dark:text-red-400"
+                    class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600"
                   >
                     {{
                       leg.easting_misclosure !== undefined
@@ -425,14 +430,14 @@
 
                   <!-- Final Northing -->
                   <td
-                    class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600"
+                    class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600 text-red-600 dark:text-red-400"
                   >
                     {{ safeFixed(leg.to.northing, 3) }}
                   </td>
 
                   <!-- Final Easting -->
                   <td
-                    class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600"
+                    class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600 text-red-600 dark:text-red-400"
                   >
                     {{ safeFixed(leg.to.easting, 3) }}
                   </td>
@@ -492,6 +497,19 @@ function safeCoordinateFixed(
   return result.toFixed(decimals);
 }
 
+// Format an area in square metres, adding a hectares equivalent for large areas.
+// Returns an em dash while the value is unavailable (e.g. before the backend supplies it).
+function formatArea(area: number | undefined | null): string {
+  if (area === undefined || area === null || isNaN(area)) {
+    return "—";
+  }
+  if (area >= 10000) {
+    const hectares = area / 10000;
+    return `${area.toFixed(3)} sqm (${hectares.toFixed(3)} hectares)`;
+  }
+  return `${area.toFixed(3)} sqm`;
+}
+
 interface TraverseResults {
   traverse_legs: Array<{
     from: {
@@ -541,6 +559,11 @@ interface TraverseResults {
       decimal: number;
     };
   }>;
+  // Populated by the backend; may arrive at the top level or nested under `traverse`.
+  area?: number;
+  traverse?: {
+    area?: number;
+  };
 }
 
 const props = defineProps<{
@@ -575,21 +598,26 @@ const traverseInfo = computed(() => {
     return sum + (isNaN(distance) ? 0 : distance);
   }, 0);
 
-  const sumNorthings = legs.reduce((sum, leg) => {
+  const northingMisclosure = legs.reduce((sum, leg) => {
     const delta = leg.delta_northing;
     return sum + (isNaN(delta) ? 0 : delta);
   }, 0);
 
-  const sumEastings = legs.reduce((sum, leg) => {
+  const eastingMisclosure = legs.reduce((sum, leg) => {
     const delta = leg.delta_easting;
     return sum + (isNaN(delta) ? 0 : delta);
   }, 0);
 
+  // Area may be returned at the top level or nested under `traverse`,
+  // depending on the endpoint. Blank until the backend populates it.
+  const rawArea = props.results?.area ?? props.results?.traverse?.area;
+
   return {
     totalDistance: safeFixed(totalDistance, 3),
     stations: legs.length,
-    sumNorthings: safeFixed(sumNorthings, 6),
-    sumEastings: safeFixed(sumEastings, 6),
+    northingMisclosure: safeFixed(northingMisclosure, 6),
+    eastingMisclosure: safeFixed(eastingMisclosure, 6),
+    area: formatArea(rawArea),
   };
 });
 

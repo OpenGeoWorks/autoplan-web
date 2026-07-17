@@ -64,8 +64,8 @@
             </div>
           </div>
           <div class="bg-gray-50 dark:bg-slate-700 p-4 rounded border border-gray-200 dark:border-slate-600">
-            <h4 class="font-medium text-gray-800 dark:text-gray-300 text-sm mb-2">Linear Misclosure</h4>
-            <p class="font-mono text-gray-900 dark:text-gray-100">{{ summary.linearMisclosure }} m</p>
+            <h4 class="font-medium text-gray-800 dark:text-gray-300 text-sm mb-2">Area</h4>
+            <p class="font-mono text-gray-900 dark:text-gray-100">{{ summary.area }}</p>
           </div>
         </div>
 
@@ -178,9 +178,12 @@ interface Results {
   traverse?: {
     total_distance: number;
     bounding_box?: Record<string, number>;
+    area?: number;
   };
   northing_misclosure?: number;
   easting_misclosure?: number;
+  // Populated by the backend; may arrive at the top level or nested under `traverse`.
+  area?: number;
 }
 
 const props = defineProps<{
@@ -199,6 +202,17 @@ const fmt = (v: number | undefined | null, d = 3): string => {
 const formatBearing = (b: Bearing | undefined): string => {
   if (!b) return "-";
   return `${b.degrees ?? 0}° ${b.minutes ?? 0}' ${b.seconds ?? 0}"`;
+};
+
+// Format an area in square metres, adding a hectares equivalent for large areas.
+// Returns an em dash while the value is unavailable (e.g. before the backend supplies it).
+const formatArea = (area: number | undefined | null): string => {
+  if (area === undefined || area === null || isNaN(area)) return "—";
+  if (area >= 10000) {
+    const hectares = area / 10000;
+    return `${area.toFixed(3)} sqm (${hectares.toFixed(3)} hectares)`;
+  }
+  return `${area.toFixed(3)} sqm`;
 };
 
 const legs = computed(() => props.results?.computed_legs ?? []);
@@ -240,12 +254,14 @@ const summary = computed(() => {
   const nMis = props.results?.northing_misclosure ?? 0;
   const eMis = props.results?.easting_misclosure ?? 0;
 
+  const rawArea = props.results?.area ?? props.results?.traverse?.area;
+
   return {
     totalDistance: fmt(totalDistance),
     stations: ids.size,
     northingMisclosure: fmt(nMis),
     eastingMisclosure: fmt(eMis),
-    linearMisclosure: fmt(Math.sqrt(nMis * nMis + eMis * eMis)),
+    area: formatArea(rawArea),
   };
 });
 
