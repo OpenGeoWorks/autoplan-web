@@ -109,6 +109,8 @@
             v-else-if="currentStep === 4"
             :coordinates="planData.topoPoints"
             :boundary="planData.boundary"
+            :show-boundary="planData.topoSettings.show_boundary !== false"
+            :show-spot-heights="planData.topoSettings.show_spot_heights !== false"
             plan-type="topographic"
             @complete="completeDrawing"
           />
@@ -218,6 +220,7 @@
             :parcels="layoutPlotParcels"
             :boundary="planData.boundary"
             :roads="planData.layoutDesign.roads"
+            :notice="layoutDrawingNotice"
             plan-type="layout"
             @complete="completeDrawing"
           />
@@ -481,6 +484,14 @@ const layoutPlotParcels = computed(() =>
     name: `${p.block ?? ""}${p.number ?? ""}`,
     ids: Array.isArray(p.ids) ? p.ids.filter(Boolean) : [],
   }))
+);
+
+// Auto-generated subdivisions are designed server-side when the final plan is
+// produced, so there are no plots/roads to preview yet.
+const layoutDrawingNotice = computed(() =>
+  planData.layoutDesign.mode === "generate"
+    ? "Auto-generated subdivision: plots and roads are designed when the final plan is generated, so they can't be previewed here yet — only the site boundary is shown. Once the plan has been generated, reopen this page to preview the designed plots."
+    : undefined
 );
 
 // Fetch plan data function (can be called anytime)

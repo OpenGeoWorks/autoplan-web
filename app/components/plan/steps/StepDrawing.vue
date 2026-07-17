@@ -4,22 +4,33 @@
       {{ heading }}
     </h2>
 
+    <!-- Optional contextual notice (e.g. layout generate mode) -->
+    <div
+      v-if="props.notice"
+      class="flex items-start gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-200"
+    >
+      <RiInformationLine class="w-4 h-4 mt-0.5 shrink-0" />
+      <span>{{ props.notice }}</span>
+    </div>
+
     <!-- Leaflet map with base-layer switch (auto: WebMercator tiles if geographic, else CRS.Simple) -->
     <div
       class="rounded-md overflow-hidden border border-gray-200 dark:border-slate-600"
     >
       <ClientOnly>
         <div
-          class="relative w-full h-96"
-          :class="{ 'simple-crs': crsMode === 'simple' }"
+          :class="[
+            isFullscreen
+              ? 'fixed inset-0 z-[9999] bg-white dark:bg-slate-900'
+              : 'relative w-full h-96',
+            { 'simple-crs': crsMode === 'simple' },
+          ]"
         >
           <div ref="mapEl" class="w-full h-full" />
-          <!-- Base layer toggle (shown for geographic coords) -->
-          <div
-            v-if="crsMode === 'geo' && latLngs.length"
-            class="absolute top-2 right-2 z-[1000]"
-          >
+          <!-- Map controls: base layer toggle + fullscreen -->
+          <div class="absolute top-2 right-2 z-[1000] flex items-center gap-2">
             <div
+              v-if="crsMode === 'geo' && latLngs.length"
               class="inline-flex rounded-md overflow-hidden shadow border border-gray-200 dark:border-slate-700 backdrop-blur bg-white/90 dark:bg-slate-800/90"
               role="group"
               aria-label="Base layer toggle"
@@ -51,6 +62,16 @@
                 Satellite
               </button>
             </div>
+            <button
+              type="button"
+              class="p-1.5 rounded-md shadow border border-gray-200 dark:border-slate-700 backdrop-blur bg-white/90 dark:bg-slate-800/90 text-gray-700 dark:text-gray-200 hover:bg-gray-100/60 dark:hover:bg-slate-700/60 focus:outline-none transition-colors"
+              :title="isFullscreen ? 'Exit full screen (Esc)' : 'Full screen'"
+              :aria-label="isFullscreen ? 'Exit full screen' : 'Full screen'"
+              @click="toggleFullscreen"
+            >
+              <RiFullscreenExitLine v-if="isFullscreen" class="w-4 h-4" />
+              <RiFullscreenLine v-else class="w-4 h-4" />
+            </button>
           </div>
           <div
             v-if="!latLngs.length"
@@ -83,6 +104,11 @@ import {
   shallowRef,
   nextTick,
 } from "vue";
+import {
+  RiFullscreenLine,
+  RiFullscreenExitLine,
+  RiInformationLine,
+} from "@remixicon/vue";
 
 type CoordInput = {
   point: string;
@@ -113,6 +139,11 @@ const props = defineProps<{
   // Layout road centerlines; ids reference the corner register passed via
   // `coordinates`.
   roads?: Array<{ name?: string; width?: number | null; ids?: string[] }>;
+  // Visibility switches (topographic settings); undefined means visible.
+  showBoundary?: boolean;
+  showSpotHeights?: boolean;
+  // Contextual banner shown above the map (e.g. layout generate-mode note).
+  notice?: string;
   legs?: Array<{
     from: { id: string; northing: number; easting: number };
     to: { id: string; northing: number; easting: number };
@@ -145,6 +176,9 @@ const emptyMessage = computed(() => {
     case "route":
       return "No stations to plot yet. Add station coordinates in the Route Alignment step.";
     case "topographic":
+      if (props.showBoundary === false && props.showSpotHeights === false) {
+        return "Boundary and spot heights are hidden by your Topo Settings.";
+      }
       return "Nothing to plot yet. Add perimeter and spot-height points in the earlier steps.";
     case "layout":
       return "Nothing to plot yet. Add a site boundary and layout design in the earlier steps.";
@@ -152,6 +186,17 @@ const emptyMessage = computed(() => {
       return "No coordinates to plot yet. Add coordinates in Step 1.";
   }
 });
+
+// Fullscreen preview (CSS-based; the map just fills the viewport)
+const isFullscreen = ref(false);
+async function toggleFullscreen() {
+  isFullscreen.value = !isFullscreen.value;
+  await nextTick();
+  mapRef.value?.invalidateSize();
+}
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === "Escape" && isFullscreen.value) void toggleFullscreen();
+}
 
 const filledRows = (rows?: CoordInput[]) =>
   (Array.isArray(rows) ? rows : []).filter(
@@ -236,6 +281,7 @@ const allParcels = computed(() => {
 
 // Boundary outline points (topographic perimeter / layout site boundary)
 const boundaryPoints = computed(() => {
+  if (props.showBoundary === false) return [];
   const rows = filledRows(props.boundary);
   const points = rows.map((r, i) => ({
     key: `boundary-${r.point}-${i}`,
@@ -256,6 +302,7 @@ const boundaryPoints = computed(() => {
 // Spot heights (topographic): the coordinates prop carries the topo points
 const spotPoints = computed(() => {
   if (props.planType !== "topographic") return [];
+  if (props.showSpotHeights === false) return [];
   return filledRows(props.coordinates).map((r, i) => ({
     key: `spot-${r.point}-${i}`,
     label: r.point || "",
@@ -966,6 +1013,7 @@ function detachDimensionEvents(map: any) {
 }
 
 onMounted(async () => {
+  window.addEventListener("keydown", onKeydown);
   const L = await import("leaflet");
   LRef.value = L;
   if (!mapEl.value) return;
@@ -987,6 +1035,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  window.removeEventListener("keydown", onKeydown);
   const map = mapRef.value;
   teardownBaseLayers();
   if (map) {
