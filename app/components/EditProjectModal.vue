@@ -165,7 +165,7 @@
             </div>
             <div>
               <label class="text-sm text-gray-800 dark:text-gray-200"
-                >License No.</label
+                >SURCON Reg. No.</label
               >
               <input
                 v-model="localForm.surveyor.license_no"

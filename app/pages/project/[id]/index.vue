@@ -181,7 +181,7 @@
                     v-if="project.surveyor.license_no"
                     class="text-gray-500 dark:text-gray-400"
                   >
-                    License: {{ project.surveyor.license_no }}
+                    SURCON Reg. No.: {{ project.surveyor.license_no }}
                   </div>
                 </div>
                 <div v-else class="text-gray-500 dark:text-gray-400">N/A</div>
