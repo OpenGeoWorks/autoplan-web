@@ -126,8 +126,8 @@
                 <th v-if="method === 'height-of-instrument'" class="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-slate-600">Height of Inst. (m)</th>
                 <th v-else class="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-slate-600">Rise (m)</th>
                 <th v-if="method === 'rise-and-fall'" class="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-slate-600">Fall (m)</th>
-                <th class="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-slate-600">Correction (m)</th>
                 <th class="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-slate-600">Uncorrected RL (m)</th>
+                <th class="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-slate-600">Correction (m)</th>
                 <th class="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-300">Reduced Level (m)</th>
               </tr>
             </thead>
@@ -144,8 +144,8 @@
                 <td v-if="method === 'height-of-instrument'" class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ fmt(s.height_of_instrument) }}</td>
                 <td v-else class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ fmt(s.rise) }}</td>
                 <td v-if="method === 'rise-and-fall'" class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ fmt(s.fall) }}</td>
-                <td class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ fmt(s.correction) }}</td>
                 <td class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ fmt(s.uncorrected_reduced_level) }}</td>
+                <td class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ fmt(s.correction) }}</td>
                 <td
                   class="px-3 py-2 text-right font-mono font-semibold"
                   :class="misclosureCorrected ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'"
@@ -274,7 +274,7 @@ const exportToCSV = () => {
   } else {
     headers.push("Rise(m)", "Fall(m)");
   }
-  headers.push("Correction(m)", "Uncorrected Reduced Level(m)", "Reduced Level(m)");
+  headers.push("Uncorrected Reduced Level(m)", "Correction(m)", "Reduced Level(m)");
 
   const rows = list.map((s) => {
     const cols = [s.stn, fmt(s.back_sight), fmt(s.intermediate_sight), fmt(s.fore_sight)];
@@ -284,8 +284,8 @@ const exportToCSV = () => {
       cols.push(fmt(s.rise), fmt(s.fall));
     }
     cols.push(
-      fmt(s.correction),
       fmt(s.uncorrected_reduced_level),
+      fmt(s.correction),
       fmt(s.reduced_level)
     );
     return cols.join(",");
