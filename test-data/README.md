@@ -64,3 +64,45 @@ An 8.75 ha irregular estate site (10 beacons, `SBL 501`–`SBL 510`).
    - `layout_plots.csv` → *Plots* table (`Block,Number,Use,Area,Corner_IDs`,
      corner ids separated by `;`)
    - `layout_roads.csv` → *Roads* table (`Name,Width,Centerline_IDs`)
+
+## 5. Small datasets — for legible screenshots
+
+The full-size layout (257 corners / 127 plots), topographic (344 spot
+heights), and route (101 stations) datasets above are realistic but render
+too dense/zoomed-out to read in a report screenshot. Use these instead when
+you need a small, clean plan:
+
+**Layout (draw mode)** — a single 60 m x 25 m block, 4 plots, 1 road (12
+corner/road points total):
+- `layout_boundary_small.csv` → *Site Boundary* (4 beacons, `SBL 601`–`SBL 604`)
+- `layout_corners_small.csv` → *Plot Corner Coordinates* (10 `LP n` + 2 `RC n`)
+- `layout_plots_small.csv` → *Plots* (Block A, plots 1–4: residential /
+  open_space / commercial / residential)
+- `layout_roads_small.csv` → *Roads* (`Access Road`, 8 m wide)
+
+Import all four, use *Enter designed layout* (draw mode), then generate.
+
+**Topographic** — a small hexagonal site with a low knoll (NE) and a shallow
+depression (SW) (32 spot heights on an 8x4 grid spread across ~75% of the
+site's width and height, not clustered in the middle, so contours reach
+close to the boundary instead of leaving a flat unmarked margin; max local
+grade ~9%, giving real terrain-like variation in contour spacing without any
+spot bunching up):
+- `topo_boundary_small.csv` → *Perimeter Survey* (6 beacons, `SAG 21`–`SAG 26`)
+- `topo_spot_heights_small.csv` → *Spot Height* (32 points, elevation 43.8–50.8 m)
+
+Import both, use contour interval **0.5 m** / major contour **2.0 m** (~14
+lines, curving around both features with more resolution than a coarser
+point set) — 0.4 m gives ~17 lines if you want it denser still, or 1.0 m for
+~7 lines if you want it sparser — then generate.
+
+**Route** — the first 380 m of the full route (a single straight tangent,
+bearing 48°, no curve), 20 stations at the standard 20 m interval:
+- `route_stations_small.csv` → *Route Alignment* (`CH0`–`CH19`, chainage
+  0+000–0+380)
+- `route_elevations_small.csv` → *Elevation Data* (rising ground, 50.06–56.79 m)
+
+Both files are an exact prefix of the full-size `route_stations.csv` /
+`route_elevations.csv`, so the geometry and elevations are already validated —
+they're just truncated before the curve that starts at CH20. Import both,
+right of way ~30 m, plan view on, station interval 20 m.

@@ -1,0 +1,5 @@
+Block,Number,Use,Area,Corner_IDs
+A,1,residential,240.0,LP 1; LP 2; LP 7; LP 6
+A,2,open_space,240.0,LP 2; LP 3; LP 8; LP 7
+A,3,commercial,240.0,LP 3; LP 4; LP 9; LP 8
+A,4,residential,240.0,LP 4; LP 5; LP 10; LP 9
