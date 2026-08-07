@@ -215,6 +215,48 @@
               </tr>
             </thead>
             <tbody>
+              <!-- Starting station coordinate: the "from" of the first leg.
+                   Only its northing/easting are shown, on the right-hand
+                   coordinate columns. Red when it is a control coordinate. -->
+              <tr
+                v-if="firstFromCoordinate"
+                class="border-b border-gray-100 dark:border-slate-600"
+              >
+                <td
+                  colspan="11"
+                  class="px-2 py-2 border-r border-gray-200 dark:border-slate-600"
+                ></td>
+                <td
+                  class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600"
+                  :class="
+                    isControlCoordinate(firstFromCoordinate)
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-gray-900 dark:text-gray-100'
+                  "
+                >
+                  {{ safeFixed(firstFromCoordinate.northing, 3) }}
+                </td>
+                <td
+                  class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600"
+                  :class="
+                    isControlCoordinate(firstFromCoordinate)
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-gray-900 dark:text-gray-100'
+                  "
+                >
+                  {{ safeFixed(firstFromCoordinate.easting, 3) }}
+                </td>
+                <td
+                  class="px-2 py-2 text-center font-medium"
+                  :class="
+                    isControlCoordinate(firstFromCoordinate)
+                      ? 'text-red-600 dark:text-red-400'
+                      : ''
+                  "
+                >
+                  {{ firstFromCoordinate.id }}
+                </td>
+              </tr>
               <template v-for="(leg, index) in computationData" :key="index">
                 <!-- First sub-row -->
                 <tr
@@ -252,16 +294,12 @@
                     }}
                   </td>
 
-                  <!-- Corrected Bearing -->
+                  <!-- Corrected Bearing (seconds rounded to a whole number) -->
                   <td
                     rowspan="3"
                     class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600"
                   >
-                    {{
-                      leg.forward_bearing
-                        ? `${leg.forward_bearing.degrees}°${leg.forward_bearing.minutes}'${leg.forward_bearing.seconds}"`
-                        : `${leg.bearing.degrees}°${leg.bearing.minutes}'${leg.bearing.seconds}"`
-                    }}
+                    {{ formatBearing(leg.forward_bearing ?? leg.bearing) }}
                   </td>
 
                   <!-- Distance -->
@@ -477,6 +515,42 @@ function safeFixed(
   return value.toFixed(decimals);
 }
 
+interface DMS {
+  degrees: number;
+  minutes: number;
+  seconds: number;
+  decimal?: number;
+}
+
+// Round a bearing's seconds to a whole number and carry over into minutes
+// and degrees: 60 seconds -> +1 minute, 60 minutes -> +1 degree, 360 deg wraps.
+function roundBearing(dms: DMS): DMS {
+  let degrees = dms.degrees ?? 0;
+  let minutes = dms.minutes ?? 0;
+  let seconds = Math.round(dms.seconds ?? 0);
+
+  if (seconds >= 60) {
+    seconds -= 60;
+    minutes += 1;
+  }
+  if (minutes >= 60) {
+    minutes -= 60;
+    degrees += 1;
+  }
+  if (degrees >= 360) {
+    degrees -= 360;
+  }
+  return { degrees, minutes, seconds };
+}
+
+// Format a bearing with its seconds rounded to a whole number.
+function formatBearing(dms: DMS | undefined | null): string {
+  if (!dms) return "-";
+  const r = roundBearing(dms);
+  const seconds = String(r.seconds).padStart(2, "0");
+  return `${r.degrees}°${r.minutes}'${seconds}"`;
+}
+
 // Format an area in square metres, adding a hectares equivalent for large areas.
 // Returns an em dash while the value is unavailable (e.g. before the backend supplies it).
 function formatArea(area: number | undefined | null): string {
@@ -544,6 +618,13 @@ interface TraverseResults {
     };
     fixed?: boolean;
   }>;
+  // Control/fixed coordinates supplied to the computation. Used to flag the
+  // starting station coordinate in red when it belongs to this array.
+  coordinates?: Array<{
+    id: string;
+    northing: number;
+    easting: number;
+  }>;
   // Populated by the backend; may arrive at the top level or nested under `traverse`.
   area?: number;
   traverse?: {
@@ -576,6 +657,29 @@ const computationData = computed(() => {
   if (!props.results?.traverse_legs) return [];
   return props.results.traverse_legs;
 });
+
+// The "from" coordinate of the first leg — shown as an extra row above the
+// first leg so the traverse's starting station coordinate is visible at the top.
+const firstFromCoordinate = computed(() => {
+  const legs = props.results?.traverse_legs;
+  if (!legs || legs.length === 0) return null;
+  return legs[0].from;
+});
+
+// True when a coordinate matches one of the control coordinates returned in the
+// response, compared by id, northing and easting.
+function isControlCoordinate(
+  coord: { id: string; northing: number; easting: number } | null | undefined
+): boolean {
+  const coords = props.results?.coordinates;
+  if (!coords || !coord) return false;
+  return coords.some(
+    (c) =>
+      c.id === coord.id &&
+      c.northing === coord.northing &&
+      c.easting === coord.easting
+  );
+}
 
 const traverseInfo = computed(() => {
   if (!props.results?.traverse_legs) return null;
