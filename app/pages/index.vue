@@ -341,7 +341,7 @@
           </p>
         </div>
 
-        <div class="grid md:grid-cols-2 gap-8 md:gap-12">
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-12">
           <div
             class="group bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-700 dark:to-slate-600 rounded-xl p-6 md:p-8 border border-blue-200 dark:border-slate-500 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
           >
@@ -358,7 +358,7 @@
               <div
                 class="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center"
               >
-                <span class="text-white font-semibold text-sm">SWP</span>
+                <span class="text-white font-semibold text-sm">SP</span>
               </div>
               <div>
                 <cite
@@ -398,6 +398,33 @@
                 <p class="text-sm text-gray-600 dark:text-gray-400">
                   Geomatics Professional
                 </p>
+              </div>
+            </div>
+          </div>
+
+          <div
+            class="group bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-slate-700 dark:to-slate-600 rounded-xl p-6 md:p-8 border border-emerald-200 dark:border-slate-500 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 md:col-span-2 lg:col-span-1"
+          >
+            <Icon
+              name="heroicons:chat-bubble-left-right-20-solid"
+              class="w-8 h-8 text-emerald-400 dark:text-emerald-300 mb-4"
+            />
+            <blockquote
+              class="text-lg text-gray-700 dark:text-gray-300 mb-4 leading-relaxed"
+            >
+              "Very lovely tool. Kudos to Surv Alabi and colleagues."
+            </blockquote>
+            <div class="flex items-center space-x-3">
+              <div
+                class="w-10 h-10 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full flex items-center justify-center"
+              >
+                <span class="text-white font-semibold text-sm">CO</span>
+              </div>
+              <div>
+                <cite
+                  class="text-gray-900 dark:text-gray-100 font-semibold not-italic"
+                  >Dr. Chukwuma Okolie</cite
+                >
               </div>
             </div>
           </div>
