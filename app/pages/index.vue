@@ -345,48 +345,28 @@
           <div
             class="group bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-700 dark:to-slate-600 rounded-xl p-6 md:p-8 border border-blue-200 dark:border-slate-500 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
           >
-            <div class="flex items-start space-x-1 mb-4">
-              <Icon
-                name="heroicons:star-20-solid"
-                class="w-5 h-5 text-yellow-400"
-              />
-              <Icon
-                name="heroicons:star-20-solid"
-                class="w-5 h-5 text-yellow-400"
-              />
-              <Icon
-                name="heroicons:star-20-solid"
-                class="w-5 h-5 text-yellow-400"
-              />
-              <Icon
-                name="heroicons:star-20-solid"
-                class="w-5 h-5 text-yellow-400"
-              />
-              <Icon
-                name="heroicons:star-20-solid"
-                class="w-5 h-5 text-yellow-400"
-              />
-            </div>
+            <Icon
+              name="heroicons:chat-bubble-left-right-20-solid"
+              class="w-8 h-8 text-blue-400 dark:text-blue-300 mb-4"
+            />
             <blockquote
               class="text-lg text-gray-700 dark:text-gray-300 mb-4 leading-relaxed"
             >
-              "AutoPlan cut our drafting time in half and the exports are
-              submission-ready. The automated calculations give us confidence in
-              our work."
+              "Great Innovation!"
             </blockquote>
             <div class="flex items-center space-x-3">
               <div
                 class="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center"
               >
-                <span class="text-white font-semibold">N</span>
+                <span class="text-white font-semibold text-sm">SWP</span>
               </div>
               <div>
                 <cite
                   class="text-gray-900 dark:text-gray-100 font-semibold not-italic"
-                  >N. Engineer</cite
+                  >Surv. Suru Whenayon Peter</cite
                 >
                 <p class="text-sm text-gray-600 dark:text-gray-400">
-                  Civil Engineer
+                  Lecturer, The Federal Polytechnic Ede, Osun State
                 </p>
               </div>
             </div>
@@ -395,47 +375,28 @@
           <div
             class="group bg-gradient-to-br from-purple-50 to-pink-50 dark:from-slate-700 dark:to-slate-600 rounded-xl p-6 md:p-8 border border-purple-200 dark:border-slate-500 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
           >
-            <div class="flex items-start space-x-1 mb-4">
-              <Icon
-                name="heroicons:star-20-solid"
-                class="w-5 h-5 text-yellow-400"
-              />
-              <Icon
-                name="heroicons:star-20-solid"
-                class="w-5 h-5 text-yellow-400"
-              />
-              <Icon
-                name="heroicons:star-20-solid"
-                class="w-5 h-5 text-yellow-400"
-              />
-              <Icon
-                name="heroicons:star-20-solid"
-                class="w-5 h-5 text-yellow-400"
-              />
-              <Icon
-                name="heroicons:star-20-solid"
-                class="w-5 h-5 text-yellow-400"
-              />
-            </div>
+            <Icon
+              name="heroicons:chat-bubble-left-right-20-solid"
+              class="w-8 h-8 text-purple-400 dark:text-purple-300 mb-4"
+            />
             <blockquote
               class="text-lg text-gray-700 dark:text-gray-300 mb-4 leading-relaxed"
             >
-              "The computation accuracy gives us confidence when submitting
-              plans. It's become an essential tool in our workflow."
+              "Wow. This is a laudable achievement. Well done."
             </blockquote>
             <div class="flex items-center space-x-3">
               <div
                 class="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-600 rounded-full flex items-center justify-center"
               >
-                <span class="text-white font-semibold">L</span>
+                <span class="text-white font-semibold text-sm">ZN</span>
               </div>
               <div>
                 <cite
                   class="text-gray-900 dark:text-gray-100 font-semibold not-italic"
-                  >L. Surveyor</cite
+                  >Surv. Zimuzochukwu Nwachukwu</cite
                 >
                 <p class="text-sm text-gray-600 dark:text-gray-400">
-                  Licensed Surveyor
+                  Geomatics Professional
                 </p>
               </div>
             </div>
