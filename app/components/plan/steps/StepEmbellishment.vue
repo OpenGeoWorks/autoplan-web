@@ -113,12 +113,19 @@
             class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
             >State</label
           >
-          <input
+          <select
             v-model="local.embellishment.state"
-            type="text"
             class="w-full text-sm rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="State"
-          />
+          >
+            <option value="">Select state</option>
+            <!-- Keep a previously saved value that isn't in the list selectable -->
+            <option v-if="hasCustomState" :value="local.embellishment.state">
+              {{ local.embellishment.state }}
+            </option>
+            <option v-for="state in NIGERIA_STATES" :key="state" :value="state">
+              {{ state }}
+            </option>
+          </select>
         </div>
         <div>
           <label
@@ -431,6 +438,7 @@
 
 <script setup lang="ts">
 import InfoTip from "~/components/InfoTip.vue";
+import { NIGERIA_STATES } from "~/utils/nigeriaStates";
 import { reactive, watch, computed, onMounted } from "vue";
 
 interface EmbellishmentState {
@@ -504,6 +512,12 @@ watch(
 );
 
 const loading = computed(() => !!props.loading);
+
+// A plan saved before the dropdown existed may hold a state name we don't list.
+const hasCustomState = computed(() => {
+  const state = local.embellishment.state;
+  return !!state && !NIGERIA_STATES.includes(state as any);
+});
 
 onMounted(() => {
   emit("refresh");
