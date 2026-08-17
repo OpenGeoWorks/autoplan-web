@@ -430,6 +430,7 @@
 import { reactive, watch } from "vue";
 import { useRoute } from "vue-router";
 import axios from "axios";
+import { formatPlanOrigin } from "~/utils/planOrigins";
 
 interface Basic {
   name: string;
@@ -537,8 +538,7 @@ async function generatePlan() {
 
 // Formatting helper functions
 function formatOrigin(origin: string | null | undefined) {
-  if (!origin) return "—";
-  return origin.replace(/_/g, " ").toUpperCase();
+  return formatPlanOrigin(origin);
 }
 
 function formatScale(scale: number | null | undefined) {

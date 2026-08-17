@@ -644,6 +644,7 @@ import { ref, reactive, onMounted, computed } from "vue";
 import { useRoute } from "vue-router";
 import { navigateTo } from "#imports";
 import axios from "axios";
+import { formatPlanOrigin } from "~/utils/planOrigins";
 
 const route = useRoute();
 const toast = useToast();
@@ -851,8 +852,7 @@ function formatNumber(v: number | string | null | undefined) {
 }
 
 function formatOrigin(origin: string | null | undefined) {
-  if (!origin) return "—";
-  return origin.replace(/_/g, " ");
+  return formatPlanOrigin(origin);
 }
 
 async function confirmDelete() {
@@ -979,7 +979,7 @@ function buildFullPlanPayload() {
     origin: planData.embellishment.origin,
     scale: Number(planData.embellishment.scale ?? 1),
     beacon_type: planData.embellishment.beacon_type,
-    beacon_size: Number(planData.embellishment.beacon_size ?? 0.75),
+    beacon_size: Number(planData.embellishment.beacon_size ?? 0.18),
     label_size: Number(planData.embellishment.label_size ?? 0.25),
     personel_name: planData.embellishment.personel_name,
     surveyor_name: planData.embellishment.surveyor_name,
