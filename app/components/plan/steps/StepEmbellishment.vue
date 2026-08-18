@@ -144,13 +144,19 @@
           <label
             class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
             >Origin
-            <InfoTip text="Coordinate system the survey is referenced to. All Lagos-area plans use U.T.M. Zone 31." /></label
+            <InfoTip text="Coordinate system the survey is referenced to. All Lagos-area plans use UTM Zone 31." /></label
           >
           <select
             v-model="local.embellishment.origin"
             class="w-full text-sm rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="utm_zone_31">U.T.M. Zone 31</option>
+            <option
+              v-for="option in PLAN_ORIGINS"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </option>
           </select>
         </div>
       </div>
@@ -215,7 +221,7 @@
           <label
             class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
             >Beacon Size
-            <InfoTip text="Size of the beacon symbols drawn at survey pillars, in metres on the ground. Computed automatically from your drawing's size." /></label
+            <InfoTip text="Size of the beacon symbols drawn at survey pillars, in metres on the ground. Computed automatically from your drawing's size so the symbol prints at about 1.6 mm on the sheet." /></label
           >
           <input
             v-model.number="local.embellishment.beacon_size"
@@ -439,6 +445,7 @@
 <script setup lang="ts">
 import InfoTip from "~/components/InfoTip.vue";
 import { NIGERIA_STATES } from "~/utils/nigeriaStates";
+import { PLAN_ORIGINS } from "~/utils/planOrigins";
 import { reactive, watch, computed, onMounted } from "vue";
 
 interface EmbellishmentState {
@@ -483,7 +490,7 @@ const local = reactive<{ embellishment: EmbellishmentState }>({
     origin: "utm_zone_31",
     scale: 1,
     beacon_type: "none",
-    beacon_size: 0.75,
+    beacon_size: 0.18,
     label_size: 0.25,
     personel_name: "",
     surveyor_name: "",
