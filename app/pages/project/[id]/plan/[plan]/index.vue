@@ -293,6 +293,22 @@
                 >({{ planData.coordinates.length }})</span
               >
               <div class="ml-auto flex items-center gap-2">
+                <label class="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                  <span class="hidden sm:inline">Precision</span>
+                  <select
+                    v-model="coordinatePrecision"
+                    class="text-xs px-2 py-1 border rounded bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-200"
+                    title="Display precision (does not affect stored values or CSV export)"
+                  >
+                    <option
+                      v-for="opt in COORDINATE_PRECISION_OPTIONS"
+                      :key="opt.value"
+                      :value="opt.value"
+                    >
+                      {{ opt.label }}
+                    </option>
+                  </select>
+                </label>
                 <button
                   @click="exportCoordinates"
                   class="text-xs px-2 py-1 border rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700"
@@ -640,11 +656,18 @@ import { RiArrowLeftLine, RiDeleteBinLine } from "@remixicon/vue";
 import ConfirmModal from "~/components/ConfirmModal.vue";
 import EditEmbellishmentModal from "~/components/EditEmbellishmentModal.vue";
 import ConvertToPlanModal from "~/components/ConvertToPlanModal.vue";
-import { ref, reactive, onMounted, computed } from "vue";
+import { ref, reactive, onMounted, computed, watch } from "vue";
 import { useRoute } from "vue-router";
 import { navigateTo } from "#imports";
 import axios from "axios";
 import { formatPlanOrigin } from "~/utils/planOrigins";
+import {
+  formatCoordinate,
+  COORDINATE_PRECISION_OPTIONS,
+  loadCoordinatePrecision,
+  saveCoordinatePrecision,
+  type CoordinatePrecision,
+} from "~/utils/formatCoordinate";
 
 const route = useRoute();
 const toast = useToast();
@@ -655,6 +678,8 @@ const initialLoading = ref(true);
 const showDeleteModal = ref(false);
 const showEditEmbellishmentModal = ref(false);
 const showAllCoordinates = ref(false);
+const coordinatePrecision = ref<CoordinatePrecision>(loadCoordinatePrecision());
+watch(coordinatePrecision, (p) => saveCoordinatePrecision(p));
 const showConvertModal = ref(false);
 
 const topographicSettings = ref<any>(null);
@@ -842,13 +867,11 @@ function exportCoordinates() {
   toast?.add?.({ title: "Coordinates exported", color: "success" });
 }
 
+// Display-only: never groups thousands and honours the user's precision
+// choice. Stored values, the CSV export and the plan payload keep full
+// precision.
 function formatNumber(v: number | string | null | undefined) {
-  if (v === null || v === undefined || v === "") return "—";
-  const n = Number(v);
-  if (Number.isNaN(n)) return String(v);
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 4 }).format(
-    n
-  );
+  return formatCoordinate(v, coordinatePrecision.value);
 }
 
 function formatOrigin(origin: string | null | undefined) {

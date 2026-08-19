@@ -72,7 +72,7 @@
             Import coordinates (CSV or TXT or XLS/XLSX)
           </div>
           <div class="text-[11px] text-gray-600 dark:text-gray-400">
-            Columns: GCP_Name, Easting, Northing
+            Any column order — you'll map columns after upload
           </div>
         </div>
       </div>
@@ -206,6 +206,14 @@
     message="This will remove all coordinate rows from the table. This action cannot be undone."
     @confirmed="confirmClear"
   />
+
+  <!-- Column mapping modal (shown after a file upload) -->
+  <CoordinateColumnMapper
+    v-model="showMapper"
+    :rows="rawRows"
+    :fields="MAPPER_FIELDS"
+    @confirm="onMappingConfirmed"
+  />
 </template>
 
 <script setup lang="ts">
@@ -213,6 +221,8 @@ import { reactive, watch, ref, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import { navigateTo } from "#imports";
 import { useCoordinateTransfer } from "~/composables/useCoordinateTransfer";
+import CoordinateColumnMapper from "~/components/CoordinateColumnMapper.vue";
+import type { FieldDef, MappedCoordinate } from "~/utils/columnMapping";
 
 interface CoordRow {
   _key: string;
@@ -234,6 +244,8 @@ const emit = defineEmits(["update:modelValue", "complete"]);
 const local = reactive<{ coordinates: CoordRow[] }>({ coordinates: [] });
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const showClearConfirm = ref(false);
+const showMapper = ref(false);
+const rawRows = ref<string[][]>([]);
 const tableRef = ref<HTMLElement | null>(null);
 const showChooser = ref(true);
 const route = useRoute();
@@ -361,6 +373,14 @@ function onComplete() {
 
 import { parseTable } from "~/composables/useSheetParser";
 
+// Fields the mapper lets the user assign for a cadastral/generic coordinate
+// upload. Elevation is not part of the coordinate table here.
+const MAPPER_FIELDS: FieldDef[] = [
+  { key: "id", label: "Point ID", required: true },
+  { key: "northing", label: "Northing", required: true },
+  { key: "easting", label: "Easting", required: true },
+];
+
 async function onFile(ev: Event) {
   const input = ev.target as HTMLInputElement;
   const file = input.files?.[0];
@@ -368,71 +388,48 @@ async function onFile(ev: Event) {
 
   const ext = "." + (file.name.split(".").pop() || "").toLowerCase();
 
-  try {
-    if (ext === ".xls" || ext === ".xlsx") {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const arrayBuffer = reader.result as ArrayBuffer;
-        let rows = await parseTable(arrayBuffer);
-
-        // Remove header row if detected
-        if (Array.isArray(rows[0])) {
-          const joined = String(rows[0].join(" ")).toLowerCase();
-          if (
-            /gcp_name|gcp|gcp_name|point|name|east|north|easting|northing/.test(
-              joined
-            )
-          ) {
-            rows = rows.slice(1);
-          }
-        }
-
-        const parsed = rows
-          .map((cols) => ({
-            _key: crypto.randomUUID(),
-            point: String(cols[0] ?? "").trim(),
-            easting: cols[1] ? Number(cols[1]) : null,
-            northing: cols[2] ? Number(cols[2]) : null,
-          }))
-          .filter((r) => r.point);
-        if (parsed.length) local.coordinates = parsed;
-        if (fileInputRef.value) fileInputRef.value.value = "";
-      };
-      reader.readAsArrayBuffer(file);
-    } else {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const text = String(reader.result || "");
-        let rows = await parseTable(text);
-
-        // Remove header row if detected
-        if (Array.isArray(rows[0])) {
-          const joined = String(rows[0].join(" ")).toLowerCase();
-          if (
-            /gcp_name|gcp|gcp_name|point|name|east|north|easting|northing/.test(
-              joined
-            )
-          ) {
-            rows = rows.slice(1);
-          }
-        }
-
-        const parsed = rows
-          .map((cols) => ({
-            _key: crypto.randomUUID(),
-            point: String(cols[0] ?? "").trim(),
-            easting: cols[1] ? Number(cols[1]) : null,
-            northing: cols[2] ? Number(cols[2]) : null,
-          }))
-          .filter((r) => r.point);
-        if (parsed.length) local.coordinates = parsed;
-        if (fileInputRef.value) fileInputRef.value.value = "";
-      };
-      reader.readAsText(file);
+  const openMapper = (rows: string[][]) => {
+    if (fileInputRef.value) fileInputRef.value.value = "";
+    if (!rows || !rows.length) {
+      toast.add({ title: "No rows found in file", color: "warning" });
+      return;
     }
+    rawRows.value = rows;
+    showMapper.value = true;
+  };
+
+  try {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const rows =
+        ext === ".xls" || ext === ".xlsx"
+          ? await parseTable(reader.result as ArrayBuffer)
+          : await parseTable(String(reader.result || ""));
+      openMapper(rows as string[][]);
+    };
+    if (ext === ".xls" || ext === ".xlsx") reader.readAsArrayBuffer(file);
+    else reader.readAsText(file);
   } catch (err) {
     console.error("File import error:", err);
     if (fileInputRef.value) fileInputRef.value.value = "";
+    toast.add({ title: "Could not read file", color: "error" });
+  }
+}
+
+// Called when the user confirms the column mapping.
+function onMappingConfirmed(mapped: MappedCoordinate[]) {
+  const parsed = mapped.map((m) => ({
+    _key: crypto.randomUUID(),
+    point: m.point,
+    northing: m.northing,
+    easting: m.easting,
+  }));
+  if (parsed.length) {
+    local.coordinates = parsed;
+    toast.add({
+      title: `Imported ${parsed.length} coordinate${parsed.length === 1 ? "" : "s"}`,
+      color: "success",
+    });
   }
 }
 

@@ -27,7 +27,7 @@
             Import topo points (CSV or TXT or XLS/XLSX)
           </div>
           <div class="text-[11px] text-gray-600 dark:text-gray-400">
-            Columns: Point, Easting, Northing, Elevation
+            Any column order — you'll map columns after upload
           </div>
         </div>
       </div>
@@ -190,6 +190,14 @@
         Load next {{ MAX_DISPLAY }}
       </button>
     </div>
+
+    <!-- Column mapping modal (shown after a file upload) -->
+    <CoordinateColumnMapper
+      v-model="showMapper"
+      :rows="rawRows"
+      :fields="MAPPER_FIELDS"
+      @confirm="onMappingConfirmed"
+    />
   </div>
 </template>
 
@@ -203,6 +211,8 @@ const syncing = ref(false);
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const loading = ref(false);
+const showMapper = ref(false);
+const rawRows = ref<string[][]>([]);
 const MAX_DISPLAY = 100;
 
 const displayCount = ref(MAX_DISPLAY);
@@ -289,53 +299,22 @@ function triggerFile() {
   fileInputRef.value?.click();
 }
 
-// parseCSV removed in favor of centralized parseTable
+// parseCSV removed in favor of centralized parseTable. Header detection now
+// lives in the column mapper (utils/columnMapping.ts).
 
 import { parseTable } from "~/composables/useSheetParser";
+import CoordinateColumnMapper from "~/components/CoordinateColumnMapper.vue";
+import type { FieldDef, MappedCoordinate } from "~/utils/columnMapping";
 
-function isHeaderRow(row: any): boolean {
-  // row can be array or object
-  try {
-    if (!row) return false;
-    if (Array.isArray(row)) {
-      const joined = String(row.join(" ")).toLowerCase();
-      // keyword detection
-      if (
-        /point|\bpt\b|east|north|northing|easting|elev|elevation/.test(joined)
-      )
-        return true;
-
-      // numeric heuristic: check how many of the next 3 columns look numeric
-      const numericCount = [1, 2, 3].reduce((c, i) => {
-        const v = row[i];
-        if (v === undefined || v === null || v === "") return c;
-        return c + (isFinite(Number(String(v).trim())) ? 1 : 0);
-      }, 0);
-      // if fewer than 2 numeric columns and there's at least one alphabetic token, treat as header
-      if (numericCount < 2 && /[a-zA-Z]/.test(joined)) return true;
-      return false;
-    } else if (typeof row === "object") {
-      const keys = Object.keys(row).join(" ").toLowerCase();
-      if (/point|\bpt\b|east|north|northing|easting|elev|elevation/.test(keys))
-        return true;
-      return false;
-    }
-  } catch (e) {
-    return false;
-  }
-  return false;
-}
-
-function stripLeadingHeaderRows(rows: any[]): any[] {
-  // remove header rows at start (could be 0 or 1)
-  let out = Array.isArray(rows) ? [...rows] : [];
-  // check first row
-  if (!out.length) return out;
-  if (isHeaderRow(out[0])) out = out.slice(1);
-  // also check new first row in case file had two header-ish rows
-  if (out.length && isHeaderRow(out[0])) out = out.slice(1);
-  return out;
-}
+// Fields the mapper lets the user assign for a topographic points upload.
+// Elevation is required — spot heights are meaningless without it (and an
+// unmapped elevation column is exactly how spot heights end up reading 0).
+const MAPPER_FIELDS: FieldDef[] = [
+  { key: "id", label: "Point ID", required: true },
+  { key: "northing", label: "Northing", required: true },
+  { key: "easting", label: "Easting", required: true },
+  { key: "elevation", label: "Elevation", required: true },
+];
 
 async function onFile(ev: Event) {
   const input = ev.target as HTMLInputElement;
@@ -344,116 +323,46 @@ async function onFile(ev: Event) {
 
   const ext = "." + (file.name.split(".").pop() || "").toLowerCase();
 
+  const openMapper = (rows: string[][]) => {
+    if (fileInputRef.value) fileInputRef.value.value = "";
+    loading.value = false;
+    if (!rows || !rows.length) return;
+    rawRows.value = rows;
+    showMapper.value = true;
+  };
+
   try {
     loading.value = true;
-    if (ext === ".xls" || ext === ".xlsx") {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const arrayBuffer = reader.result as ArrayBuffer;
-        let rows = await parseTable(arrayBuffer);
-        rows = stripLeadingHeaderRows(rows);
-
-        const parsed = rows.map((cols) => ({
-          _key: crypto.randomUUID(),
-          point: String(
-            (Array.isArray(cols) ? cols[0] : cols["Point"] ?? cols["point"]) ??
-              ""
-          ).trim(),
-          easting: Array.isArray(cols)
-            ? cols[1]
-              ? Number(cols[1])
-              : null
-            : cols["Easting"] !== undefined
-            ? Number(cols["Easting"])
-            : cols["easting"] !== undefined
-            ? Number(cols["easting"])
-            : null,
-          northing: Array.isArray(cols)
-            ? cols[2]
-              ? Number(cols[2])
-              : null
-            : cols["Northing"] !== undefined
-            ? Number(cols["Northing"])
-            : cols["northing"] !== undefined
-            ? Number(cols["northing"])
-            : null,
-          elevation: Array.isArray(cols)
-            ? cols[3]
-              ? Number(cols[3])
-              : null
-            : cols["Elevation"] !== undefined
-            ? Number(cols["Elevation"])
-            : cols["elevation"] !== undefined
-            ? Number(cols["elevation"])
-            : null,
-        }));
-        if (parsed.length) {
-          local.coordinates = parsed;
-          // reset displayed count to first page
-          displayCount.value = Math.min(MAX_DISPLAY, parsed.length);
-          // emit full dataset even though UI will only show first MAX_DISPLAY rows
-          emit("update:modelValue", { coordinates: [...local.coordinates] });
-        }
-        if (fileInputRef.value) fileInputRef.value.value = "";
-        loading.value = false;
-      };
-      reader.readAsArrayBuffer(file);
-    } else {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const text = String(reader.result || "");
-        let rows = await parseTable(text);
-        rows = stripLeadingHeaderRows(rows);
-
-        const parsed = rows.map((cols) => ({
-          _key: crypto.randomUUID(),
-          point: String(
-            (Array.isArray(cols) ? cols[0] : cols["Point"] ?? cols["point"]) ??
-              ""
-          ).trim(),
-          easting: Array.isArray(cols)
-            ? cols[1]
-              ? Number(cols[1])
-              : null
-            : cols["Easting"] !== undefined
-            ? Number(cols["Easting"])
-            : cols["easting"] !== undefined
-            ? Number(cols["easting"])
-            : null,
-          northing: Array.isArray(cols)
-            ? cols[2]
-              ? Number(cols[2])
-              : null
-            : cols["Northing"] !== undefined
-            ? Number(cols["Northing"])
-            : cols["northing"] !== undefined
-            ? Number(cols["northing"])
-            : null,
-          elevation: Array.isArray(cols)
-            ? cols[3]
-              ? Number(cols[3])
-              : null
-            : cols["Elevation"] !== undefined
-            ? Number(cols["Elevation"])
-            : cols["elevation"] !== undefined
-            ? Number(cols["elevation"])
-            : null,
-        }));
-        if (parsed.length) {
-          local.coordinates = parsed;
-          // reset displayed count to first page
-          displayCount.value = Math.min(MAX_DISPLAY, parsed.length);
-          emit("update:modelValue", { coordinates: [...local.coordinates] });
-        }
-        if (fileInputRef.value) fileInputRef.value.value = "";
-        loading.value = false;
-      };
-      reader.readAsText(file);
-    }
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const rows =
+        ext === ".xls" || ext === ".xlsx"
+          ? await parseTable(reader.result as ArrayBuffer)
+          : await parseTable(String(reader.result || ""));
+      openMapper(rows as string[][]);
+    };
+    if (ext === ".xls" || ext === ".xlsx") reader.readAsArrayBuffer(file);
+    else reader.readAsText(file);
   } catch (err) {
     console.error("File import error:", err);
     if (fileInputRef.value) fileInputRef.value.value = "";
     loading.value = false;
+  }
+}
+
+// Called when the user confirms the column mapping.
+function onMappingConfirmed(mapped: MappedCoordinate[]) {
+  const parsed = mapped.map((m) => ({
+    _key: crypto.randomUUID(),
+    point: m.point,
+    northing: m.northing,
+    easting: m.easting,
+    elevation: m.elevation,
+  }));
+  if (parsed.length) {
+    local.coordinates = parsed;
+    displayCount.value = Math.min(MAX_DISPLAY, parsed.length);
+    emit("update:modelValue", { coordinates: [...local.coordinates] });
   }
 }
 

@@ -16,6 +16,8 @@ export interface PlanOriginOption {
 
 export const PLAN_ORIGINS: PlanOriginOption[] = [
   { value: "utm_zone_31", label: "UTM Zone 31" },
+  { value: "utm_zone_32", label: "UTM Zone 32" },
+  { value: "utm_zone_33", label: "UTM Zone 33" },
 ];
 
 export const PLAN_ORIGIN_LABELS: Record<string, string> = Object.fromEntries(

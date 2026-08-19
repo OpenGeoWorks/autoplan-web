@@ -56,8 +56,13 @@
               v-model.number="local.contour_interval"
               type="number"
               step="0.01"
+              min="0"
               class="w-full px-3 py-2 rounded border bg-white dark:bg-slate-800"
+              :class="errors.contour_interval ? 'border-red-500' : ''"
             />
+            <p v-if="errors.contour_interval" class="mt-1 text-xs text-red-600">
+              {{ errors.contour_interval }}
+            </p>
           </div>
           <div>
             <label class="text-xs text-gray-600 mb-1 flex items-center gap-1"
@@ -68,8 +73,13 @@
               v-model.number="local.major_contour"
               type="number"
               step="1"
+              min="0"
               class="w-full px-3 py-2 rounded border bg-white dark:bg-slate-800"
+              :class="errors.major_contour ? 'border-red-500' : ''"
             />
+            <p v-if="errors.major_contour" class="mt-1 text-xs text-red-600">
+              {{ errors.major_contour }}
+            </p>
           </div>
         </div>
       </div>
@@ -241,8 +251,30 @@ const local = reactive<any>({
 });
 
 const submitting = ref(false);
+const errors = reactive<{ contour_interval?: string; major_contour?: string }>(
+  {}
+);
 const route = useRoute();
 const planId = String(route.params.plan || "");
+
+// Contour interval/major only matter when contours are drawn; validate them
+// then so the user gets a clear message instead of a rejected save or a blank
+// contour layer. Mirrors the Python `_validate_contour_settings` guard.
+function validateContourSettings(): boolean {
+  errors.contour_interval = undefined;
+  errors.major_contour = undefined;
+  if (!local.show_contours) return true;
+
+  const interval = Number(local.contour_interval);
+  const major = Number(local.major_contour);
+  if (!(interval > 0)) {
+    errors.contour_interval = "Contour interval must be greater than 0.";
+  }
+  if (!(major > 0)) {
+    errors.major_contour = "Major contour must be greater than 0.";
+  }
+  return !errors.contour_interval && !errors.major_contour;
+}
 
 watch(
   () => props.modelValue?.settings,
@@ -275,8 +307,19 @@ watch(
   { deep: true }
 );
 
+// Re-check once errors are showing so they clear as soon as the user fixes them.
+watch(
+  () => [local.contour_interval, local.major_contour, local.show_contours],
+  () => {
+    if (errors.contour_interval || errors.major_contour) {
+      validateContourSettings();
+    }
+  }
+);
+
 async function onSave() {
   if (submitting.value) return;
+  if (!validateContourSettings()) return;
   submitting.value = true;
   try {
     const payload = {
