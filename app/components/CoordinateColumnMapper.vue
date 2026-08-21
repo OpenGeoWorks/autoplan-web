@@ -223,13 +223,19 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "update:modelValue", v: boolean): void;
   /**
-   * The chosen columns, and the sample rows as mapped.
+   * The mapped rows, and the column choices that produced them.
    *
-   * The columns are what matters when the file is parsed on the server: only
-   * a preview of it ever reaches the browser, so the rows here are a sample,
-   * not the data — the server applies these indices to the whole file.
+   * ``columns`` is a second argument rather than part of the first so that
+   * every existing consumer -- which only ever wanted the rows -- keeps
+   * working untouched. It matters when the file is being parsed on the
+   * server: only a preview of it reaches the browser, so ``rows`` is a
+   * sample and the indices are what get applied to the whole file.
    */
-  (e: "confirm", result: { rows: MappedRow[]; mapping: ColumnMapping; hasHeader: boolean }): void;
+  (
+    e: "confirm",
+    rows: MappedRow[],
+    columns: { mapping: ColumnMapping; hasHeader: boolean },
+  ): void;
   /** New column order after a slot was dragged onto another slot. */
   (e: "reorder", order: FieldDef[]): void;
   (e: "cancel"): void;
@@ -389,8 +395,7 @@ function previewCell(row: MappedRow, key: FieldKey): string {
 function onConfirm() {
   if (missingRequired.value.length || previewTotal.value === 0) return;
   saveSessionMapping(mappingSignature(detected.value, props.fields), mapping.value);
-  emit("confirm", {
-    rows: mappedRows.value,
+  emit("confirm", mappedRows.value, {
     mapping: { ...mapping.value },
     hasHeader: hasHeader.value,
   });

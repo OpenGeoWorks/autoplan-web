@@ -754,22 +754,24 @@ async function onFile(ev: Event) {
 // from a sample, and what it produces is a set of column indices that the
 // server applies to the whole file. Only an Excel sheet, which cannot be
 // streamed, still carries its rows here.
-async function onMappingConfirmed(result: {
-  rows: MappedRow[];
-  mapping: Record<string, number | null>;
-  hasHeader: boolean;
-}) {
+async function onMappingConfirmed(
+  mapped: MappedRow[],
+  columns: { mapping: Record<string, number | null>; hasHeader: boolean },
+) {
   const file = pendingFile.value;
   pendingFile.value = null;
 
   if (file) {
-    await sendCoordinateFile(file, result.mapping);
+    // The rows above are only the sample the dialog was shown. The file
+    // itself is still on disk here and is parsed on the server, using the
+    // columns the user just picked.
+    await sendCoordinateFile(file, columns.mapping);
     return;
   }
 
   // The table keeps whatever column order the user arranged — an upload
   // supplies values, not layout.
-  const parsed = result.rows.map((m) => ({
+  const parsed = mapped.map((m) => ({
     _key: crypto.randomUUID(),
     point: String(m.point ?? ""),
     northing: m.northing as number | null,
