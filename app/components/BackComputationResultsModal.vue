@@ -66,13 +66,15 @@
               <div class="flex justify-between">
                 <span class="text-gray-600 dark:text-gray-400">Northing:</span>
                 <span class="font-mono text-gray-900 dark:text-gray-100">
-                  {{ summary.minNorthing }} – {{ summary.maxNorthing }}
+                  {{ formatCoordinateValue(summary.minNorthing) }} –
+                  {{ formatCoordinateValue(summary.maxNorthing) }}
                 </span>
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-600 dark:text-gray-400">Easting:</span>
                 <span class="font-mono text-gray-900 dark:text-gray-100">
-                  {{ summary.minEasting }} – {{ summary.maxEasting }}
+                  {{ formatCoordinateValue(summary.minEasting) }} –
+                  {{ formatCoordinateValue(summary.maxEasting) }}
                 </span>
               </div>
             </div>
@@ -80,6 +82,9 @@
         </div>
 
         <!-- Results Table -->
+        <div class="mb-2 flex justify-end">
+          <CoordinatePrecisionSelector v-model="coordinatePrecision" />
+        </div>
         <div class="overflow-x-auto border border-gray-200 dark:border-slate-600 rounded-lg">
           <table class="w-full text-xs">
             <thead class="bg-gray-50 dark:bg-slate-700">
@@ -104,10 +109,10 @@
                 <td class="px-3 py-1.5"></td>
                 <td class="px-3 py-1.5"></td>
                 <td class="px-3 py-1.5 font-mono text-gray-900 dark:text-gray-100">
-                  {{ startInfo.easting }}
+                  {{ formatCoordinateValue(startInfo.easting, "") }}
                 </td>
                 <td class="px-3 py-1.5 font-mono text-gray-900 dark:text-gray-100">
-                  {{ startInfo.northing }}
+                  {{ formatCoordinateValue(startInfo.northing, "") }}
                 </td>
                 <td class="px-3 py-1.5 text-gray-900 dark:text-gray-100">
                   {{ startInfo.id }}
@@ -136,10 +141,10 @@
                   {{ row.deltaN }}
                 </td>
                 <td class="px-3 py-1.5 font-mono text-gray-900 dark:text-gray-100">
-                  {{ row.easting }}
+                  {{ formatCoordinateValue(row.easting, "") }}
                 </td>
                 <td class="px-3 py-1.5 font-mono text-gray-900 dark:text-gray-100">
-                  {{ row.northing }}
+                  {{ formatCoordinateValue(row.northing, "") }}
                 </td>
                 <td class="px-3 py-1.5 text-gray-900 dark:text-gray-100">
                   {{ row.toStation }}
@@ -184,6 +189,7 @@
 
 <script lang="ts" setup>
 import { computed } from "vue";
+import { useCoordinatePrecision } from "~/composables/useCoordinatePrecision";
 
 interface Bearing {
   degrees: number;
@@ -235,6 +241,8 @@ const props = defineProps<{
 
 defineEmits<{ close: [] }>();
 
+const { coordinatePrecision, formatCoordinateValue } = useCoordinatePrecision();
+
 const fmt = (v: number | undefined | null, d = 3): string => {
   if (v === undefined || v === null || isNaN(v)) return "";
   return v.toFixed(d);
@@ -263,8 +271,8 @@ const startInfo = computed(() => {
   if (!first) return null;
   return {
     id: first.id,
-    northing: fmt(first.northing),
-    easting: fmt(first.easting),
+    northing: first.northing,
+    easting: first.easting,
   };
 });
 
@@ -274,8 +282,8 @@ const rows = computed(() =>
     bearing: formatBearing(leg.bearing),
     deltaE: fmt(leg.delta_easting),
     deltaN: fmt(leg.delta_northing),
-    easting: fmt(leg.to.easting),
-    northing: fmt(leg.to.northing),
+    easting: leg.to.easting,
+    northing: leg.to.northing,
     toStation: leg.to.id,
     // The ring is closed by repeating the first point, so the added leg is
     // always the last one.
@@ -297,10 +305,10 @@ const summary = computed(() => {
     totalDistance: fmt(t?.total_distance),
     stations: ids.size,
     area: formatArea(t?.area),
-    minNorthing: fmt(t?.bounding_box?.min_northing),
-    maxNorthing: fmt(t?.bounding_box?.max_northing),
-    minEasting: fmt(t?.bounding_box?.min_easting),
-    maxEasting: fmt(t?.bounding_box?.max_easting),
+    minNorthing: t?.bounding_box?.min_northing,
+    maxNorthing: t?.bounding_box?.max_northing,
+    minEasting: t?.bounding_box?.min_easting,
+    maxEasting: t?.bounding_box?.max_easting,
   };
 });
 
@@ -321,7 +329,7 @@ const exportToCSV = () => {
 
   if (startInfo.value) {
     csvRows.push(
-      ["", "", "", "", startInfo.value.easting, startInfo.value.northing, startInfo.value.id].join(",")
+      ["", "", "", "", fmt(startInfo.value.easting), fmt(startInfo.value.northing), startInfo.value.id].join(",")
     );
   }
 

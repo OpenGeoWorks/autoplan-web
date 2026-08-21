@@ -94,6 +94,9 @@
         </div>
 
         <!-- Main Results Table -->
+        <div class="mb-2 flex justify-end">
+          <CoordinatePrecisionSelector v-model="coordinatePrecision" />
+        </div>
         <div
           class="overflow-x-auto border border-gray-200 dark:border-slate-600 rounded-lg"
         >
@@ -234,7 +237,7 @@
                       : 'text-gray-900 dark:text-gray-100'
                   "
                 >
-                  {{ safeFixed(firstFromCoordinate.northing, 3) }}
+                  {{ formatCoordinateValue(firstFromCoordinate.northing, "") }}
                 </td>
                 <td
                   class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600"
@@ -244,7 +247,7 @@
                       : 'text-gray-900 dark:text-gray-100'
                   "
                 >
-                  {{ safeFixed(firstFromCoordinate.easting, 3) }}
+                  {{ formatCoordinateValue(firstFromCoordinate.easting, "") }}
                 </td>
                 <td
                   class="px-2 py-2 text-center font-medium"
@@ -386,14 +389,14 @@
                   <td
                     class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600"
                   >
-                    {{ safeFixed(leg.to.uncorrected_northing, 3) }}
+                    {{ formatCoordinateValue(leg.to.uncorrected_northing, "") }}
                   </td>
 
                   <!-- Uncorrected Easting -->
                   <td
                     class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600"
                   >
-                    {{ safeFixed(leg.to.uncorrected_easting, 3) }}
+                    {{ formatCoordinateValue(leg.to.uncorrected_easting, "") }}
                   </td>
 
                   <!-- To Station -->
@@ -462,7 +465,7 @@
                     class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600"
                     :class="misclosureApplied || leg.fixed ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'"
                   >
-                    {{ safeFixed(leg.to.northing, 3) }}
+                    {{ formatCoordinateValue(leg.to.northing, "") }}
                   </td>
 
                   <!-- Final Easting -->
@@ -470,7 +473,7 @@
                     class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600"
                     :class="misclosureApplied || leg.fixed ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'"
                   >
-                    {{ safeFixed(leg.to.easting, 3) }}
+                    {{ formatCoordinateValue(leg.to.easting, "") }}
                   </td>
                 </tr>
               </template>
@@ -503,6 +506,9 @@
 
 <script lang="ts" setup>
 import { computed } from "vue";
+import { useCoordinatePrecision } from "~/composables/useCoordinatePrecision";
+
+const { coordinatePrecision, formatCoordinateValue } = useCoordinatePrecision();
 
 // Helper function to safely format numbers and handle NaN/undefined values
 function safeFixed(

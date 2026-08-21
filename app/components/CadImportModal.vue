@@ -169,9 +169,12 @@
 
         <!-- What will be imported -->
         <section v-if="selectedRing" class="space-y-2">
-          <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">
-            3. Coordinates to import
-          </h3>
+          <div class="flex items-center justify-between gap-3">
+            <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">
+              3. Coordinates to import
+            </h3>
+            <CoordinatePrecisionSelector v-model="coordinatePrecision" />
+          </div>
           <p class="text-xs text-gray-600 dark:text-gray-400">
             {{ stationsRecovered }} Bearings, distances and area are recomputed
             from the geometry — they are never read from the drawing's text.
@@ -194,8 +197,8 @@
                   class="border-t border-gray-100 dark:border-slate-700"
                 >
                   <td class="py-1 px-3">{{ row.id }}</td>
-                  <td class="py-1 px-3">{{ row.northing }}</td>
-                  <td class="py-1 px-3">{{ row.easting }}</td>
+                  <td class="py-1 px-3">{{ formatCoordinateValue(row.northing) }}</td>
+                  <td class="py-1 px-3">{{ formatCoordinateValue(row.easting) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -234,6 +237,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import CadRingPreview from "~/components/CadRingPreview.vue";
+import { useCoordinatePrecision } from "~/composables/useCoordinatePrecision";
 import type { CadInspection, CadRing, CadStation } from "~/utils/cadImport";
 import { UNIT_OPTIONS, formatRingArea } from "~/utils/cadImport";
 
@@ -252,6 +256,7 @@ const emit = defineEmits<{
 const selectedRingId = ref<string>("");
 const showLayers = ref(false);
 const units = ref<number>(6);
+const { coordinatePrecision, formatCoordinateValue } = useCoordinatePrecision();
 
 // Largest ring first, so the parcel is preselected and the common case is a
 // single click.
@@ -290,8 +295,7 @@ const spanLabel = computed(() => {
   return `${w.toFixed(1)} m × ${h.toFixed(1)} m`;
 });
 
-const fmt = (value?: number | null) =>
-  value == null ? "—" : value.toFixed(3);
+const fmt = (value?: number | null) => formatCoordinateValue(value);
 
 const formatArea = formatRingArea;
 

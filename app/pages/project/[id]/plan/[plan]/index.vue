@@ -297,6 +297,11 @@
               <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
                 Computation Data
               </h2>
+              <CoordinatePrecisionSelector
+                v-if="showsCoordinatePrecision"
+                v-model="coordinatePrecision"
+                class="ml-auto"
+              />
             </div>
 
             <div
@@ -392,22 +397,7 @@
                 >({{ planData.coordinates.length }})</span
               >
               <div class="ml-auto flex items-center gap-2">
-                <label class="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-                  <span class="hidden sm:inline">Precision</span>
-                  <select
-                    v-model="coordinatePrecision"
-                    class="text-xs px-2 py-1 border rounded bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-200"
-                    title="Display precision (does not affect stored values or CSV export)"
-                  >
-                    <option
-                      v-for="opt in COORDINATE_PRECISION_OPTIONS"
-                      :key="opt.value"
-                      :value="opt.value"
-                    >
-                      {{ opt.label }}
-                    </option>
-                  </select>
-                </label>
+                <CoordinatePrecisionSelector v-model="coordinatePrecision" />
                 <button
                   @click="exportCoordinates"
                   class="text-xs px-2 py-1 border rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700"
@@ -759,14 +749,9 @@ import { ref, reactive, onMounted, computed, watch } from "vue";
 import { useRoute } from "vue-router";
 import { navigateTo } from "#imports";
 import axios from "axios";
+import { generatePlan as requestPlanGeneration } from "~/composables/usePlanGeneration";
+import { useCoordinatePrecision } from "~/composables/useCoordinatePrecision";
 import { formatPlanOrigin } from "~/utils/planOrigins";
-import {
-  formatCoordinate,
-  COORDINATE_PRECISION_OPTIONS,
-  loadCoordinatePrecision,
-  saveCoordinatePrecision,
-  type CoordinatePrecision,
-} from "~/utils/formatCoordinate";
 
 const route = useRoute();
 const toast = useToast();
@@ -777,8 +762,7 @@ const initialLoading = ref(true);
 const showDeleteModal = ref(false);
 const showEditEmbellishmentModal = ref(false);
 const showAllCoordinates = ref(false);
-const coordinatePrecision = ref<CoordinatePrecision>(loadCoordinatePrecision());
-watch(coordinatePrecision, (p) => saveCoordinatePrecision(p));
+const { coordinatePrecision, formatCoordinateValue } = useCoordinatePrecision();
 const showConvertModal = ref(false);
 
 const topographicSettings = ref<any>(null);
@@ -789,6 +773,9 @@ const footerSize = ref<number | null>(null);
 const isComputationOnly = ref(false);
 const computationType = ref<string | null>(null);
 const computationData = ref<any>(null);
+const showsCoordinatePrecision = computed(() =>
+  ["back", "forward", "traverse"].includes(computationType.value ?? ""),
+);
 
 /**
  * A computation-only plan has no coordinates, parcels or embellishments to
@@ -831,8 +818,8 @@ const computationView = computed(() => {
           columns: ["Point ID", "Northing (mN)", "Easting (mE)", "Elevation (m)"],
           rows: points.map((p: any) => [
             p.id ?? "—",
-            num(p.northing),
-            num(p.easting),
+            formatNumber(p.northing),
+            formatNumber(p.easting),
             num(p.elevation),
           ]),
         },
@@ -858,8 +845,8 @@ const computationView = computed(() => {
         columns: ["Point ID", "Northing (mN)", "Easting (mE)"],
         rows: coordinates.map((point: any) => [
           point.id ?? "—",
-          num(point.northing),
-          num(point.easting),
+          formatNumber(point.northing),
+          formatNumber(point.easting),
         ]),
       });
       sections.push({
@@ -894,8 +881,8 @@ const computationView = computed(() => {
           }),
           num(row.departure),
           num(row.latitude),
-          num(row.northing),
-          num(row.easting),
+          formatNumber(row.northing),
+          formatNumber(row.easting),
         ]),
       });
     }
@@ -934,8 +921,8 @@ const computationView = computed(() => {
           columns: ["Point ID", "Northing (mN)", "Easting (mE)"],
           rows: coordinates.map((point: any) => [
             point.id ?? "—",
-            num(point.northing),
-            num(point.easting),
+            formatNumber(point.northing),
+            formatNumber(point.easting),
           ]),
         },
         {
@@ -1172,7 +1159,7 @@ function exportCoordinates() {
 // choice. Stored values, the CSV export and the plan payload keep full
 // precision.
 function formatNumber(v: number | string | null | undefined) {
-  return formatCoordinate(v, coordinatePrecision.value);
+  return formatCoordinateValue(v);
 }
 
 function formatOrigin(origin: string | null | undefined) {
@@ -1207,7 +1194,7 @@ async function handleConvertToPlan(planType: string) {
     conversionState.loading = true;
     conversionState.error = null;
 
-    const response = await axios.post(`/plan/computation/convert/${planId}`, {
+    const response = await axios.put(`/plan/computation/convert/${planId}`, {
       type: planType,
     });
 
@@ -1250,27 +1237,22 @@ async function generatePlan() {
     generationState.error = null;
     generationState.url = null;
 
-    const response = await axios.get(`/plan/generate/${planId}`);
+    const url = await requestPlanGeneration(planId);
+    generationState.url = url;
 
-    if (response.data?.error === false && response.data?.data?.url) {
-      generationState.url = response.data.data.url;
+    // Create a temporary anchor element to trigger download
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `plan_${planData.basic.name || planId}.zip`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 
-      // Create a temporary anchor element to trigger download
-      const link = document.createElement("a");
-      link.href = response.data.data.url;
-      link.download = `plan_${planData.basic.name || planId}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      toast?.add?.({
-        title: "Plan generated successfully!",
-        description: "Your plan package has been downloaded.",
-        color: "success",
-      });
-    } else {
-      throw new Error("Invalid response format");
-    }
+    toast?.add?.({
+      title: "Plan generated successfully!",
+      description: "Your plan package has been downloaded.",
+      color: "success",
+    });
   } catch (error: any) {
     console.error("Plan generation error:", error);
     const errorMessage =

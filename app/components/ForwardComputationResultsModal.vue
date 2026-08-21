@@ -70,6 +70,9 @@
         </div>
 
         <!-- Results Table -->
+        <div class="mb-2 flex justify-end">
+          <CoordinatePrecisionSelector v-model="coordinatePrecision" />
+        </div>
         <div class="overflow-x-auto border border-gray-200 dark:border-slate-600 rounded-lg">
           <table class="w-full text-xs">
             <thead class="bg-gray-50 dark:bg-slate-700">
@@ -95,8 +98,8 @@
                 <td class="px-3 py-2 border-r border-gray-200 dark:border-slate-600"></td>
                 <td class="px-3 py-2 border-r border-gray-200 dark:border-slate-600"></td>
                 <td class="px-3 py-2 border-r border-gray-200 dark:border-slate-600"></td>
-                <td class="px-3 py-2 text-right font-mono text-red-600 dark:text-red-400 border-r border-gray-200 dark:border-slate-600">{{ startInfo.northing }}</td>
-                <td class="px-3 py-2 text-right font-mono text-red-600 dark:text-red-400 border-r border-gray-200 dark:border-slate-600">{{ startInfo.easting }}</td>
+                <td class="px-3 py-2 text-right font-mono text-red-600 dark:text-red-400 border-r border-gray-200 dark:border-slate-600">{{ formatCoordinateValue(startInfo.northing, "") }}</td>
+                <td class="px-3 py-2 text-right font-mono text-red-600 dark:text-red-400 border-r border-gray-200 dark:border-slate-600">{{ formatCoordinateValue(startInfo.easting, "") }}</td>
                 <td class="px-3 py-2 font-medium text-gray-900 dark:text-gray-100">{{ startInfo.id }}</td>
               </tr>
 
@@ -114,11 +117,11 @@
                 <td
                   class="px-3 py-2 text-right font-mono border-r border-gray-200 dark:border-slate-600"
                   :class="misclosureApplied ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'"
-                >{{ row.northing }}</td>
+                >{{ formatCoordinateValue(row.northing, "") }}</td>
                 <td
                   class="px-3 py-2 text-right font-mono border-r border-gray-200 dark:border-slate-600"
                   :class="misclosureApplied ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'"
-                >{{ row.easting }}</td>
+                >{{ formatCoordinateValue(row.easting, "") }}</td>
                 <td class="px-3 py-2 font-medium text-gray-900 dark:text-gray-100">{{ row.toStation }}</td>
               </tr>
             </tbody>
@@ -156,6 +159,7 @@
 
 <script lang="ts" setup>
 import { computed } from "vue";
+import { useCoordinatePrecision } from "~/composables/useCoordinatePrecision";
 
 interface Bearing {
   degrees: number;
@@ -203,6 +207,8 @@ const props = defineProps<{
 
 defineEmits<{ close: []; "save-coordinates": [] }>();
 
+const { coordinatePrecision, formatCoordinateValue } = useCoordinatePrecision();
+
 const fmt = (v: number | undefined | null, d = 3): string => {
   if (v === undefined || v === null || isNaN(v)) return "";
   return v.toFixed(d);
@@ -229,7 +235,7 @@ const legs = computed(() => props.results?.computed_legs ?? []);
 const startInfo = computed(() => {
   const s = props.results?.start;
   if (!s) return null;
-  return { id: s.id, northing: fmt(s.northing), easting: fmt(s.easting) };
+  return { id: s.id, northing: s.northing, easting: s.easting };
 });
 
 const rows = computed(() =>
@@ -239,8 +245,8 @@ const rows = computed(() =>
     distance: fmt(leg.distance),
     deltaN: fmt(leg.delta_northing),
     deltaE: fmt(leg.delta_easting),
-    northing: fmt(leg.to.northing),
-    easting: fmt(leg.to.easting),
+    northing: leg.to.northing,
+    easting: leg.to.easting,
     toStation: leg.to.id,
   }))
 );
@@ -292,7 +298,7 @@ const exportToCSV = () => {
 
   if (startInfo.value) {
     csvRows.push(
-      ["", "", "", "", "", startInfo.value.northing, startInfo.value.easting, startInfo.value.id].join(",")
+      ["", "", "", "", "", fmt(startInfo.value.northing), fmt(startInfo.value.easting), startInfo.value.id].join(",")
     );
   }
 
