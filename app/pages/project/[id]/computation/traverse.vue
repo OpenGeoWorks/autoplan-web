@@ -43,19 +43,21 @@
             <thead>
               <tr class="border-b border-gray-200 dark:border-slate-700">
                 <th
-                  class="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300"
+                  v-for="col in tableColumns"
+                  :key="col.key"
+                  draggable="true"
+                  :title="`Drag to move the ${col.label} column`"
+                  class="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300 cursor-grab active:cursor-grabbing select-none"
+                  :class="[
+                    dragKey === col.key ? 'opacity-40' : '',
+                    overKey === col.key ? 'bg-blue-100 dark:bg-blue-900/40' : '',
+                  ]"
+                  @dragstart="onHeaderDragStart(col.key)"
+                  @dragover.prevent="onHeaderDragOver(col.key)"
+                  @drop.prevent="onHeaderDrop(col.key)"
+                  @dragend="onHeaderDragEnd"
                 >
-                  Point ID
-                </th>
-                <th
-                  class="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300"
-                >
-                  Northing(mN)
-                </th>
-                <th
-                  class="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300"
-                >
-                  Easting(mE)
+                  {{ col.label }}
                 </th>
                 <th
                   class="text-center py-3 px-4 font-medium text-gray-700 dark:text-gray-300"
@@ -70,30 +72,18 @@
                 :key="index"
                 class="border-b border-gray-100 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700"
               >
-                <td class="py-3 px-4">
+                <td
+                  v-for="col in tableColumns"
+                  :key="col.key"
+                  class="py-3 px-4"
+                >
                   <input
-                    v-model="coord.id"
-                    type="text"
+                    :value="(coord as any)[col.key]"
+                    :type="col.type === 'text' ? 'text' : 'number'"
+                    :step="col.type === 'text' ? undefined : '0.001'"
+                    :placeholder="col.placeholder"
                     class="w-full px-2 py-1 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500"
-                    placeholder="KG|21"
-                  />
-                </td>
-                <td class="py-3 px-4">
-                  <input
-                    v-model.number="coord.northing"
-                    type="number"
-                    step="0.001"
-                    class="w-full px-2 py-1 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500"
-                    placeholder="860071.644"
-                  />
-                </td>
-                <td class="py-3 px-4">
-                  <input
-                    v-model.number="coord.easting"
-                    type="number"
-                    step="0.001"
-                    class="w-full px-2 py-1 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500"
-                    placeholder="622885.055"
+                    @input="setCell(coord, col, ($event.target as HTMLInputElement).value)"
                   />
                 </td>
                 <td class="py-3 px-4 text-center">
@@ -373,6 +363,40 @@ import { ref, computed } from "vue";
 import TraverseComputationResultsModal from "~/components/TraverseComputationResultsModal.vue";
 import SaveComputationModal from "~/components/SaveComputationModal.vue";
 import { parseTable } from "~/composables/useSheetParser";
+import {
+  ID_FIELD,
+  NORTHING_FIELD,
+  EASTING_FIELD,
+  type FieldDef,
+} from "~/utils/columnMapping";
+import { useColumnOrder, applyStoredOrder } from "~/composables/useColumnOrder";
+
+// Column order of the known-coordinates table. Northing-first and
+// easting-first are both common; the choice is remembered per surveyor.
+const MAPPER_FIELDS: FieldDef[] = [
+  { ...ID_FIELD, key: "id", label: "Point ID", placeholder: "KG|21" },
+  { ...NORTHING_FIELD, label: "Northing(mN)", placeholder: "860071.644" },
+  { ...EASTING_FIELD, label: "Easting(mE)", placeholder: "622885.055" },
+];
+
+const tableColumns = ref<FieldDef[]>(
+  applyStoredOrder("traverse-coords", MAPPER_FIELDS),
+);
+
+const {
+  dragKey,
+  overKey,
+  onHeaderDragStart,
+  onHeaderDragOver,
+  onHeaderDrop,
+  onHeaderDragEnd,
+} = useColumnOrder("traverse-coords", tableColumns);
+
+function setCell(row: any, col: FieldDef, value: string) {
+  row[col.key] =
+    col.type === "text" ? value : value === "" ? null : Number(value);
+}
+
 
 definePageMeta({ middleware: ["auth"] });
 

@@ -114,16 +114,29 @@
             class="bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700"
           >
             <tr>
-              <th class="px-3 py-2 text-left">
+              <th
+                v-for="col in tableColumns"
+                :key="col.key"
+                draggable="true"
+                :title="`Drag to move the ${col.label} column`"
+                @dragstart="onHeaderDragStart(col.key)"
+                @dragover.prevent="onHeaderDragOver(col.key)"
+                @drop.prevent="onHeaderDrop(col.key)"
+                @dragend="onHeaderDragEnd"
+                class="cursor-grab active:cursor-grabbing select-none px-3 py-2 text-left"
+                              :class="[
+                dragKey === col.key ? 'opacity-40' : '',
+                overKey === col.key ? 'bg-blue-100 dark:bg-blue-900/40' : '',
+                ]"
+              >
                 <span class="flex items-center gap-1">
-                  Station
+                  {{ col.label }}
                   <InfoTip
+                    v-if="col.key === 'point'"
                     text="Must match the point ids of your elevation data so each station gets both a position and a level."
                   />
                 </span>
               </th>
-              <th class="px-3 py-2 text-left">Northing (m)</th>
-              <th class="px-3 py-2 text-left">Easting (m)</th>
               <th class="px-3 py-2 w-10"></th>
             </tr>
           </thead>
@@ -133,28 +146,21 @@
               :key="row._key"
               class="border-b border-gray-100 dark:border-slate-700/60"
             >
-              <td class="px-3 py-1.5">
+              <td
+                v-for="col in tableColumns"
+                :key="col.key"
+                class="px-3 py-1.5"
+              >
                 <input
-                  v-model="row.point"
-                  type="text"
-                  placeholder="CH0"
-                  class="w-28 text-sm rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 px-2 py-1"
-                />
-              </td>
-              <td class="px-3 py-1.5">
-                <input
-                  v-model.number="row.northing"
-                  type="number"
-                  step="0.001"
-                  class="w-40 text-sm rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 px-2 py-1"
-                />
-              </td>
-              <td class="px-3 py-1.5">
-                <input
-                  v-model.number="row.easting"
-                  type="number"
-                  step="0.001"
-                  class="w-40 text-sm rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 px-2 py-1"
+                  :value="(row as any)[col.key]"
+                  :type="col.type === 'text' ? 'text' : 'number'"
+                  :step="col.type === 'text' ? undefined : '0.001'"
+                  :placeholder="col.placeholder"
+                  :class="[
+                    col.type === 'text' ? 'w-28' : 'w-40',
+                    'text-sm rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 px-2 py-1',
+                  ]"
+                  @input="setCell(row, col, ($event.target as HTMLInputElement).value)"
                 />
               </td>
               <td class="px-3 py-1.5">
@@ -168,7 +174,7 @@
             </tr>
             <tr v-if="!local.stations.length">
               <td
-                colspan="4"
+                :colspan="tableColumns.length + 1"
                 class="px-3 py-6 text-center text-sm text-gray-500 dark:text-gray-400"
               >
                 No stations yet — prefill from your elevation data or add rows.
@@ -203,6 +209,15 @@
         {{ loading ? "Saving..." : "Save & Continue" }}
       </button>
     </div>
+
+    <!-- Column mapping modal (shown after a file upload) -->
+    <CoordinateColumnMapper
+      v-model="showMapper"
+      :rows="rawRows"
+      :fields="tableColumns"
+      @confirm="onMappingConfirmed"
+      @reorder="setOrder"
+    />
   </div>
 </template>
 
@@ -211,6 +226,61 @@ import { reactive, ref, computed, watch } from "vue";
 import { useRoute } from "vue-router";
 import InfoTip from "~/components/InfoTip.vue";
 import { parseTable } from "~/composables/useSheetParser";
+import CoordinateColumnMapper from "~/components/CoordinateColumnMapper.vue";
+import {
+  ID_FIELD,
+  NORTHING_FIELD,
+  EASTING_FIELD,
+  type FieldDef,
+  type MappedRow,
+} from "~/utils/columnMapping";
+import { useColumnOrder, applyStoredOrder } from "~/composables/useColumnOrder";
+
+// Keyed by the property each value lands on in a station row.
+const MAPPER_FIELDS: FieldDef[] = [
+  { ...ID_FIELD, key: "point", label: "Station", placeholder: "CH0" },
+  { ...NORTHING_FIELD, label: "Northing (m)" },
+  { ...EASTING_FIELD, label: "Easting (m)" },
+];
+
+/** Column order of the table; follows the uploaded file once mapped. */
+const tableColumns = ref<FieldDef[]>(
+  applyStoredOrder("route-alignment", MAPPER_FIELDS),
+);
+
+// Dragging a heading moves the column and its data; it does not change which
+// uploaded column feeds the field.
+const {
+  setOrder,
+  dragKey,
+  overKey,
+  onHeaderDragStart,
+  onHeaderDragOver,
+  onHeaderDrop,
+  onHeaderDragEnd,
+} = useColumnOrder("route-alignment", tableColumns);
+const showMapper = ref(false);
+const rawRows = ref<string[][]>([]);
+
+function setCell(row: any, col: FieldDef, value: string) {
+  row[col.key] =
+    col.type === "text" ? value : value === "" ? null : Number(value);
+}
+
+function onMappingConfirmed(mapped: MappedRow[]) {
+  const parsed = mapped.map((m) => ({
+    _key: crypto.randomUUID(),
+    point: String(m.point ?? ""),
+    northing: m.northing as number | null,
+    easting: m.easting as number | null,
+  }));
+  if (parsed.length) {
+    local.stations = parsed;
+    toast.add({ title: `Imported ${parsed.length} stations`, color: "success" });
+  } else {
+    toast.add({ title: "No stations found in the file", color: "error" });
+  }
+}
 
 interface StationRow {
   _key: string;
@@ -294,29 +364,6 @@ function downloadTemplate() {
   URL.revokeObjectURL(url);
 }
 
-function applyImportedRows(rows: any[][]) {
-  if (Array.isArray(rows[0])) {
-    const joined = String(rows[0].join(" ")).toLowerCase();
-    if (/gcp_name|gcp|point|name|east|north|easting|northing|station/.test(joined)) {
-      rows = rows.slice(1);
-    }
-  }
-  const parsed = rows
-    .map((cols) => ({
-      _key: crypto.randomUUID(),
-      point: String(cols[0] ?? "").trim(),
-      easting: cols[1] !== undefined && cols[1] !== "" ? Number(cols[1]) : null,
-      northing: cols[2] !== undefined && cols[2] !== "" ? Number(cols[2]) : null,
-    }))
-    .filter((r) => r.point && r.easting != null && r.northing != null);
-  if (parsed.length) {
-    local.stations = parsed;
-    toast.add({ title: `Imported ${parsed.length} stations`, color: "success" });
-  } else {
-    toast.add({ title: "No stations found in the file", color: "error" });
-  }
-}
-
 async function onFile(event: Event) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
@@ -327,8 +374,9 @@ async function onFile(event: Event) {
     const rows = await parseTable(
       isExcel ? (reader.result as ArrayBuffer) : String(reader.result || "")
     );
-    applyImportedRows(rows as any[][]);
     if (fileInputRef.value) fileInputRef.value.value = "";
+    rawRows.value = rows as string[][];
+    showMapper.value = true;
   };
   if (isExcel) reader.readAsArrayBuffer(file);
   else reader.readAsText(file);

@@ -104,7 +104,7 @@
             <div
               v-if="mapping[field.key] !== null"
               draggable="true"
-              @dragstart.stop="onDragStart(mapping[field.key] as number)"
+              @dragstart.stop="onDragStart(mapping[field.key] as number, field.key)"
               @dragend="dragCol = null"
               @click.stop="pick(mapping[field.key] as number)"
               class="px-2.5 py-1.5 rounded bg-blue-50 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 cursor-grab active:cursor-grabbing"
@@ -209,8 +209,8 @@ import {
   saveSessionMapping,
   type FieldDef,
   type ColumnMapping,
-  type CoordinateField,
-  type MappedCoordinate,
+  type FieldKey,
+  type MappedRow,
 } from "~/utils/columnMapping";
 
 const props = defineProps<{
@@ -222,16 +222,23 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "update:modelValue", v: boolean): void;
-  (e: "confirm", rows: MappedCoordinate[]): void;
+  /** The re-derived rows, keyed by field. Column layout is the caller's. */
+  (e: "confirm", rows: MappedRow[]): void;
+  /** New column order after a slot was dragged onto another slot. */
+  (e: "reorder", order: FieldDef[]): void;
   (e: "cancel"): void;
 }>();
 
 const PREVIEW_LIMIT = 5;
 
 const hasHeader = ref(false);
-const mapping = ref<ColumnMapping>(emptyMapping());
+const mapping = ref<ColumnMapping>(emptyMapping(props.fields));
 const pickedCol = ref<number | null>(null); // tap-to-place selection
 const dragCol = ref<number | null>(null); // drag source
+// Set when the drag began on a filled field slot rather than the tray. Moving
+// a slot onto another reorders the columns; it must not re-point a field at a
+// different source column, which is how a heading ends up over wrong values.
+const dragFromField = ref<FieldKey | null>(null);
 
 // Re-detect and prefill whenever the modal opens with new rows.
 watch(
@@ -240,7 +247,7 @@ watch(
     if (!open) return;
     const d = detectColumns(props.rows);
     hasHeader.value = d.hasHeader;
-    const remembered = loadSessionMapping(mappingSignature(d));
+    const remembered = loadSessionMapping(mappingSignature(d, props.fields));
     mapping.value = remembered ? { ...remembered } : autoDetectMapping(d, props.fields);
     pickedCol.value = null;
   },
@@ -293,17 +300,17 @@ function sampleFor(col: number): string {
 }
 
 const mappedRows = computed(() =>
-  applyMapping(detected.value.dataRows, mapping.value),
+  applyMapping(detected.value.dataRows, mapping.value, props.fields),
 );
 const previewTotal = computed(() => mappedRows.value.length);
 const previewRows = computed(() => mappedRows.value.slice(0, PREVIEW_LIMIT));
 
-const missingRequired = computed<CoordinateField[]>(() =>
+const missingRequired = computed<FieldKey[]>(() =>
   unmappedRequiredFields(mapping.value, props.fields).map((f) => f.key),
 );
 
 // --- Assignment (swap semantics: a column lives in at most one field) ---
-function assign(col: number, field: CoordinateField) {
+function assign(col: number, field: FieldKey) {
   const from =
     props.fields.find((f) => mapping.value[f.key] === col)?.key ?? null;
   if (from === field) {
@@ -322,7 +329,7 @@ function assign(col: number, field: CoordinateField) {
   pickedCol.value = null;
 }
 
-function unassign(field: CoordinateField) {
+function unassign(field: FieldKey) {
   mapping.value[field] = null;
 }
 
@@ -330,20 +337,36 @@ function unassign(field: CoordinateField) {
 function pick(col: number) {
   pickedCol.value = pickedCol.value === col ? null : col;
 }
-function onSlotClick(field: CoordinateField) {
+function onSlotClick(field: FieldKey) {
   if (pickedCol.value !== null) assign(pickedCol.value, field);
 }
 
 // Native drag-and-drop.
-function onDragStart(col: number) {
+function onDragStart(col: number, fromField: FieldKey | null = null) {
   dragCol.value = col;
+  dragFromField.value = fromField;
   pickedCol.value = null;
 }
-function onDropToField(field: CoordinateField) {
-  if (dragCol.value !== null) assign(dragCol.value, field);
+function onDropToField(field: FieldKey) {
+  if (dragFromField.value && dragFromField.value !== field) {
+    // Slot onto slot: move the column, carrying its heading and its data.
+    const next = [...props.fields];
+    const from = next.findIndex((f) => f.key === dragFromField.value);
+    const to = next.findIndex((f) => f.key === field);
+    if (from !== -1 && to !== -1) {
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved!);
+      emit("reorder", next);
+    }
+  } else if (dragCol.value !== null) {
+    // Tray onto slot: assign this source column to the field.
+    assign(dragCol.value, field);
+  }
   dragCol.value = null;
+  dragFromField.value = null;
 }
 function onDropToTray() {
+  dragFromField.value = null;
   // Dropping back into the tray unassigns wherever the column currently sits.
   if (dragCol.value === null) return;
   for (const f of props.fields) {
@@ -352,21 +375,14 @@ function onDropToTray() {
   dragCol.value = null;
 }
 
-function previewCell(row: MappedCoordinate, key: CoordinateField): string {
-  const v =
-    key === "id"
-      ? row.point
-      : key === "northing"
-      ? row.northing
-      : key === "easting"
-      ? row.easting
-      : row.elevation;
-  return v === null || v === "" ? "—" : String(v);
+function previewCell(row: MappedRow, key: FieldKey): string {
+  const v = row[key];
+  return v === null || v === undefined || v === "" ? "—" : String(v);
 }
 
 function onConfirm() {
   if (missingRequired.value.length || previewTotal.value === 0) return;
-  saveSessionMapping(mappingSignature(detected.value), mapping.value);
+  saveSessionMapping(mappingSignature(detected.value, props.fields), mapping.value);
   emit("confirm", mappedRows.value);
   emit("update:modelValue", false);
 }

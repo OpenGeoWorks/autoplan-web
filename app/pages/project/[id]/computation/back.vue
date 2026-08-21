@@ -86,24 +86,21 @@
             <thead>
               <tr class="border-b border-gray-200 dark:border-slate-700">
                 <th
-                  class="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300"
+                  v-for="col in tableColumns"
+                  :key="col.key"
+                  draggable="true"
+                  :title="`Drag to move the ${col.label} column`"
+                  @dragstart="onHeaderDragStart(col.key)"
+                  @dragover.prevent="onHeaderDragOver(col.key)"
+                  @drop.prevent="onHeaderDrop(col.key)"
+                  @dragend="onHeaderDragEnd"
+                  class="cursor-grab active:cursor-grabbing select-none text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300"
+                                :class="[
+                  dragKey === col.key ? 'opacity-40' : '',
+                  overKey === col.key ? 'bg-blue-100 dark:bg-blue-900/40' : '',
+                  ]"
                 >
-                  Point ID
-                </th>
-                <th
-                  class="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300"
-                >
-                  Easting(mE)
-                </th>
-                <th
-                  class="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300"
-                >
-                  Northing(mN)
-                </th>
-                <th
-                  class="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300"
-                >
-                  Elevation(m)
+                  {{ col.label }}
                 </th>
                 <th
                   class="text-center py-3 px-4 font-medium text-gray-700 dark:text-gray-300"
@@ -118,39 +115,18 @@
                 :key="index"
                 class="border-b border-gray-100 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700"
               >
-                <td class="py-3 px-4">
+                <td
+                  v-for="col in tableColumns"
+                  :key="col.key"
+                  class="py-3 px-4"
+                >
                   <input
-                    v-model="row.pointId"
-                    type="text"
+                    :value="(row as any)[col.key]"
+                    :type="col.type === 'text' ? 'text' : 'number'"
+                    :step="col.type === 'text' ? undefined : '0.001'"
+                    :placeholder="col.placeholder"
                     class="w-full px-2 py-1 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500"
-                    placeholder="A"
-                  />
-                </td>
-                <td class="py-3 px-4">
-                  <input
-                    v-model.number="row.easting"
-                    type="number"
-                    step="0.001"
-                    class="w-full px-2 py-1 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500"
-                    placeholder="543210.000"
-                  />
-                </td>
-                <td class="py-3 px-4">
-                  <input
-                    v-model.number="row.northing"
-                    type="number"
-                    step="0.001"
-                    class="w-full px-2 py-1 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500"
-                    placeholder="712345.000"
-                  />
-                </td>
-                <td class="py-3 px-4">
-                  <input
-                    v-model.number="row.elevation"
-                    type="number"
-                    step="0.001"
-                    class="w-full px-2 py-1 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500"
-                    placeholder="optional"
+                    @input="setCell(row, col, ($event.target as HTMLInputElement).value)"
                   />
                 </td>
                 <td class="py-3 px-4 text-center">
@@ -251,6 +227,15 @@
     @close="showResultsModal = false"
   />
 
+  <!-- Column mapping modal (shown after a file upload) -->
+  <CoordinateColumnMapper
+    v-model="showMapper"
+    :rows="rawRows"
+    :fields="tableColumns"
+    @confirm="onMappingConfirmed"
+    @reorder="setOrder"
+  />
+
   <!-- Save Computation Modal -->
   <SaveComputationModal
     v-model="showSaveModal"
@@ -266,6 +251,16 @@ import { navigateTo } from "#imports";
 import { ref, computed } from "vue";
 import { parseTable } from "~/composables/useSheetParser";
 import BackComputationResultsModal from "~/components/BackComputationResultsModal.vue";
+import CoordinateColumnMapper from "~/components/CoordinateColumnMapper.vue";
+import {
+  ID_FIELD,
+  NORTHING_FIELD,
+  EASTING_FIELD,
+  ELEVATION_FIELD,
+  type FieldDef,
+  type MappedRow,
+} from "~/utils/columnMapping";
+import { useColumnOrder, applyStoredOrder } from "~/composables/useColumnOrder";
 
 definePageMeta({ middleware: ["auth"] });
 
@@ -288,6 +283,56 @@ const emptyRow = (): BackRow => ({
 });
 
 const backRows = ref<BackRow[]>([emptyRow()]);
+
+// Keyed by the property each value lands on in a row, so a mapped row drops
+// straight into the table.
+const MAPPER_FIELDS: FieldDef[] = [
+  { ...ID_FIELD, key: "pointId", label: "Point ID", placeholder: "A" },
+  { ...EASTING_FIELD, label: "Easting(mE)", placeholder: "543210.000" },
+  { ...NORTHING_FIELD, label: "Northing(mN)", placeholder: "712345.000" },
+  { ...ELEVATION_FIELD, label: "Elevation(m)", placeholder: "optional" },
+];
+
+/** Column order of the table; follows the uploaded file once mapped. */
+const tableColumns = ref<FieldDef[]>(
+  applyStoredOrder("back-computation", MAPPER_FIELDS),
+);
+
+// Dragging a heading moves the column and its data; it does not change which
+// uploaded column feeds the field.
+const {
+  setOrder,
+  dragKey,
+  overKey,
+  onHeaderDragStart,
+  onHeaderDragOver,
+  onHeaderDrop,
+  onHeaderDragEnd,
+} = useColumnOrder("back-computation", tableColumns);
+const showMapper = ref(false);
+const rawRows = ref<string[][]>([]);
+
+/** Write a cell back, parsing to a number unless the field is text. */
+function setCell(row: BackRow, col: FieldDef, value: string) {
+  (row as any)[col.key] =
+    col.type === "text" ? value : value === "" ? null : Number(value);
+}
+
+function onMappingConfirmed(mapped: MappedRow[]) {
+  const parsed = mapped.map((m) => ({
+    pointId: String(m.pointId ?? ""),
+    easting: m.easting as number | null,
+    northing: m.northing as number | null,
+    elevation: m.elevation as number | null,
+  }));
+  if (parsed.length) {
+    backRows.value = parsed;
+    toast.add({
+      title: `Imported ${parsed.length} coordinate${parsed.length === 1 ? "" : "s"}`,
+      color: "success",
+    });
+  }
+}
 
 /**
  * Repeat the first point at the end so the closing leg is computed and the
@@ -389,78 +434,37 @@ const triggerBackFile = () => {
   backFileInputRef.value?.click();
 };
 
-const parseBackCSV = async (input: string | ArrayBuffer | any): Promise<BackRow[]> => {
-  const rows = await parseTable(input);
-  if (!rows || rows.length === 0) return [];
-
-  const firstRow = Array.isArray(rows[0])
-    ? rows[0].map((c: any) => String(c ?? "").toLowerCase()).join(" ")
-    : String(rows[0] ?? "").toLowerCase();
-  const hasHeader = /point|id|east|north|elev|height/i.test(firstRow);
-  const dataRows = hasHeader ? rows.slice(1) : rows;
-
-  const parsedRows: BackRow[] = [];
-  for (const colsRaw of dataRows) {
-    const cols = (colsRaw || []).map((c: any) => String(c ?? "").trim());
-    if (cols.length < 3) continue;
-
-    const pointId = String(cols[0] || "").trim();
-    const easting = parseFloat(cols[1] || "");
-    const northing = parseFloat(cols[2] || "");
-    const elevationRaw = cols[3];
-    const elevation =
-      elevationRaw === undefined || elevationRaw === ""
-        ? null
-        : parseFloat(elevationRaw);
-
-    if (!pointId || isNaN(easting) || isNaN(northing)) continue;
-
-    parsedRows.push({
-      pointId,
-      easting,
-      northing,
-      elevation: elevation === null || isNaN(elevation) ? null : elevation,
-    });
-  }
-  return parsedRows;
-};
-
 const onBackFile = async (event: Event) => {
   const target = event.target as HTMLInputElement;
   const file = target.files?.[0];
   if (!file) return;
 
   const ext = "." + (file.name.split(".").pop() || "").toLowerCase();
-  const applyParsed = (parsed: BackRow[]) => {
-    if (!parsed.length) {
-      toast.add({
-        title: "No coordinates found in that file",
-        color: "error",
-      });
+  const openMapper = (rows: string[][]) => {
+    if (backFileInputRef.value) backFileInputRef.value.value = "";
+    if (!rows || !rows.length) {
+      toast.add({ title: "No rows found in file", color: "warning" });
       return;
     }
-    backRows.value = parsed;
+    rawRows.value = rows;
+    showMapper.value = true;
   };
 
   try {
     const reader = new FileReader();
-    if (ext === ".xls" || ext === ".xlsx") {
-      reader.onload = async (e) => {
-        applyParsed(await parseBackCSV(e.target?.result as ArrayBuffer));
-      };
-      reader.readAsArrayBuffer(file);
-    } else {
-      reader.onload = async (e) => {
-        applyParsed(await parseBackCSV(e.target?.result as string));
-      };
-      reader.readAsText(file);
-    }
+    reader.onload = async () => {
+      const rows =
+        ext === ".xls" || ext === ".xlsx"
+          ? await parseTable(reader.result as ArrayBuffer)
+          : await parseTable(String(reader.result || ""));
+      openMapper(rows as string[][]);
+    };
+    if (ext === ".xls" || ext === ".xlsx") reader.readAsArrayBuffer(file);
+    else reader.readAsText(file);
   } catch (err) {
     console.error("Back file import error:", err);
-    toast.add({
-      title: "Failed to import file",
-      color: "error",
-    });
+    if (backFileInputRef.value) backFileInputRef.value.value = "";
+    toast.add({ title: "Could not read file", color: "error" });
   }
 };
 
