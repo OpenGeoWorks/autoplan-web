@@ -302,15 +302,23 @@ const missingRequired = computed<CoordinateField[]>(() =>
   unmappedRequiredFields(mapping.value, props.fields).map((f) => f.key),
 );
 
-// --- Assignment (move semantics: a column lives in at most one field) ---
+// --- Assignment (swap semantics: a column lives in at most one field) ---
 function assign(col: number, field: CoordinateField) {
-  // If this column is already in another field, clear that field first.
-  for (const f of props.fields) {
-    if (f.key !== field && mapping.value[f.key] === col) {
-      mapping.value[f.key] = null;
-    }
+  const from =
+    props.fields.find((f) => mapping.value[f.key] === col)?.key ?? null;
+  if (from === field) {
+    pickedCol.value = null;
+    return;
   }
+
+  // Whatever was in the target field takes the dragged column's place, so two
+  // filled fields trade rather than the occupant being thrown back to the tray.
+  // A column dragged from the tray has no place to give, so the occupant
+  // returns to the tray as before.
+  const displaced = mapping.value[field];
   mapping.value[field] = col;
+  if (from !== null) mapping.value[from] = displaced;
+
   pickedCol.value = null;
 }
 
