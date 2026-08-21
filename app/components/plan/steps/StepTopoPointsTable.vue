@@ -89,10 +89,23 @@
           class="bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300"
         >
           <tr>
-            <th class="px-3 py-2 text-left">Point Name</th>
-            <th class="px-3 py-2 text-left">Easting (mE)</th>
-            <th class="px-3 py-2 text-left">Northing (mN)</th>
-            <th class="px-3 py-2 text-left">Elevation (m)</th>
+            <th
+              v-for="col in tableColumns"
+              :key="col.key"
+              draggable="true"
+              :title="`Drag to move the ${col.label} column`"
+              @dragstart="onHeaderDragStart(col.key)"
+              @dragover.prevent="onHeaderDragOver(col.key)"
+              @drop.prevent="onHeaderDrop(col.key)"
+              @dragend="onHeaderDragEnd"
+              class="cursor-grab active:cursor-grabbing select-none px-3 py-2 text-left"
+                            :class="[
+              dragKey === col.key ? 'opacity-40' : '',
+              overKey === col.key ? 'bg-blue-100 dark:bg-blue-900/40' : '',
+              ]"
+            >
+              {{ col.label }}
+            </th>
             <th class="px-3 py-2"></th>
           </tr>
         </thead>
@@ -102,35 +115,20 @@
             :key="row._key"
             class="border-t border-gray-200 dark:border-slate-700"
           >
-            <td class="px-3 py-1">
+            <td
+              v-for="col in tableColumns"
+              :key="col.key"
+              class="px-3 py-1"
+            >
               <input
-                v-model="row.point"
-                type="text"
-                class="w-16 px-2 py-1 text-xs rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:outline-none"
-              />
-            </td>
-            <td class="px-3 py-1">
-              <input
-                v-model.number="row.easting"
-                type="number"
-                step="0.01"
-                class="w-28 px-2 py-1 text-xs rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:outline-none"
-              />
-            </td>
-            <td class="px-3 py-1">
-              <input
-                v-model.number="row.northing"
-                type="number"
-                step="0.01"
-                class="w-28 px-2 py-1 text-xs rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:outline-none"
-              />
-            </td>
-            <td class="px-3 py-1">
-              <input
-                v-model.number="row.elevation"
-                type="number"
-                step="0.01"
-                class="w-20 px-2 py-1 text-xs rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:outline-none"
+                :value="(row as any)[col.key]"
+                :type="col.type === 'text' ? 'text' : 'number'"
+                :step="col.type === 'text' ? undefined : '0.01'"
+                :class="[
+                  col.type === 'text' ? 'w-16' : 'w-28',
+                  'px-2 py-1 text-xs rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:outline-none',
+                ]"
+                @input="setCell(row, col, ($event.target as HTMLInputElement).value)"
               />
             </td>
             <td class="px-3 py-1 text-right">
@@ -144,7 +142,7 @@
           </tr>
           <tr v-if="!local.coordinates.length">
             <td
-              colspan="5"
+              :colspan="tableColumns.length + 1"
               class="px-3 py-4 text-center text-xs text-gray-500 dark:text-gray-400"
             >
               No topo points added yet.
@@ -195,8 +193,9 @@
     <CoordinateColumnMapper
       v-model="showMapper"
       :rows="rawRows"
-      :fields="MAPPER_FIELDS"
+      :fields="tableColumns"
       @confirm="onMappingConfirmed"
+      @reorder="setOrder"
     />
   </div>
 </template>
@@ -304,17 +303,49 @@ function triggerFile() {
 
 import { parseTable } from "~/composables/useSheetParser";
 import CoordinateColumnMapper from "~/components/CoordinateColumnMapper.vue";
-import type { FieldDef, MappedCoordinate } from "~/utils/columnMapping";
+import {
+  ID_FIELD,
+  NORTHING_FIELD,
+  EASTING_FIELD,
+  ELEVATION_FIELD,
+  asRequired,
+  type FieldDef,
+  type MappedRow,
+} from "~/utils/columnMapping";
+import { useColumnOrder, applyStoredOrder } from "~/composables/useColumnOrder";
 
 // Fields the mapper lets the user assign for a topographic points upload.
 // Elevation is required — spot heights are meaningless without it (and an
 // unmapped elevation column is exactly how spot heights end up reading 0).
 const MAPPER_FIELDS: FieldDef[] = [
-  { key: "id", label: "Point ID", required: true },
-  { key: "northing", label: "Northing", required: true },
-  { key: "easting", label: "Easting", required: true },
-  { key: "elevation", label: "Elevation", required: true },
+  { ...ID_FIELD, key: "point", label: "Point Name" },
+  { ...EASTING_FIELD, label: "Easting (mE)" },
+  { ...NORTHING_FIELD, label: "Northing (mN)" },
+  { ...asRequired(ELEVATION_FIELD), label: "Elevation (m)" },
 ];
+
+/** Column order of the table; follows the uploaded file once mapped. */
+const tableColumns = ref<FieldDef[]>(
+  applyStoredOrder("topo-points", MAPPER_FIELDS),
+);
+
+// Dragging a heading moves the column and its data; it does not change which
+// uploaded column feeds the field.
+const {
+  setOrder,
+  dragKey,
+  overKey,
+  onHeaderDragStart,
+  onHeaderDragOver,
+  onHeaderDrop,
+  onHeaderDragEnd,
+} = useColumnOrder("topo-points", tableColumns);
+
+/** Write a cell back, parsing to a number unless the field is text. */
+function setCell(row: any, col: FieldDef, value: string) {
+  row[col.key] =
+    col.type === "text" ? value : value === "" ? null : Number(value);
+}
 
 async function onFile(ev: Event) {
   const input = ev.target as HTMLInputElement;
@@ -351,13 +382,13 @@ async function onFile(ev: Event) {
 }
 
 // Called when the user confirms the column mapping.
-function onMappingConfirmed(mapped: MappedCoordinate[]) {
+function onMappingConfirmed(mapped: MappedRow[]) {
   const parsed = mapped.map((m) => ({
     _key: crypto.randomUUID(),
-    point: m.point,
-    northing: m.northing,
-    easting: m.easting,
-    elevation: m.elevation,
+    point: String(m.point ?? ""),
+    northing: m.northing as number | null,
+    easting: m.easting as number | null,
+    elevation: m.elevation as number | null,
   }));
   if (parsed.length) {
     local.coordinates = parsed;

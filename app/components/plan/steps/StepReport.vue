@@ -399,6 +399,24 @@
           </button>
         </div>
 
+        <!-- Background jobs report real stages and row counts, so a long
+             generation shows what it is doing rather than a bare spinner. -->
+        <div
+          v-if="generationState.loading && generationState.progress.background"
+          class="mt-3"
+        >
+          <div class="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
+            <span>{{ describeProgress(generationState.progress) }}</span>
+            <span>{{ generationState.progress.percent }}%</span>
+          </div>
+          <div class="h-1.5 w-full rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden">
+            <div
+              class="h-full rounded-full bg-blue-600 transition-all duration-500"
+              :style="{ width: generationState.progress.percent + '%' }"
+            />
+          </div>
+        </div>
+
         <div
           v-if="generationState.error"
           class="mt-3 text-sm text-red-600 dark:text-red-400"
@@ -430,6 +448,11 @@
 import { reactive, watch } from "vue";
 import { useRoute } from "vue-router";
 import axios from "axios";
+import {
+  generatePlan as runGeneration,
+  emptyProgress,
+  describeProgress,
+} from "~/composables/usePlanGeneration";
 import { formatPlanOrigin } from "~/utils/planOrigins";
 
 interface Basic {
@@ -473,6 +496,7 @@ const generationState = reactive({
   loading: false,
   url: null as string | null,
   error: null as string | null,
+  progress: emptyProgress(),
 });
 
 // Sync from parent once on mount and whenever the reference changes (avoid deep echo loops)
@@ -498,14 +522,18 @@ async function generatePlan() {
     generationState.error = null;
     generationState.url = null;
 
-    const response = await axios.get(`/plan/generate/${planId}`);
+    // A large survey is generated as a background job; this follows it and
+    // reports progress, and returns the URL either way.
+    const url = await runGeneration(planId, (progress) => {
+      generationState.progress = progress;
+    });
 
-    if (response.data?.error === false && response.data?.data?.url) {
-      generationState.url = response.data.data.url;
+    if (url) {
+      generationState.url = url;
       
       // Automatically trigger download
       const link = document.createElement('a');
-      link.href = response.data.data.url;
+      link.href = url;
       link.download = ''; // Browser will use filename from URL
       document.body.appendChild(link);
       link.click();

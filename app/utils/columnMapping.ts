@@ -1,33 +1,45 @@
 /**
- * In-app column mapping for uploaded coordinate files.
+ * In-app column mapping for uploaded data files.
  *
- * Uploaded CSV/XLSX files don't always put ID/Northing/Easting/Elevation in the
- * order the app assumes. Rather than send users back to Excel to rearrange
- * columns, we let them map each field to a source column in-app. This module
- * holds the detection/auto-map/apply logic; the UI lives in
+ * Uploaded CSV/XLSX files don't always put their columns in the order the app
+ * assumes. Rather than send users back to Excel to rearrange them, we let them
+ * map each field to a source column in-app. This module holds the
+ * detection/auto-map/apply logic; the UI lives in
  * `components/CoordinateColumnMapper.vue`.
  *
+ * The field set is supplied by the caller, so the same mapper serves a
+ * coordinate upload, a levelling sheet and a traverse field book. Presets for
+ * the common shapes are at the bottom of this file.
+ *
  * The source file is never modified — mapping only re-derives the in-memory
- * coordinate rows.
+ * rows.
  */
 
-export type CoordinateField = "id" | "northing" | "easting" | "elevation";
+export type FieldKey = string;
 
 export interface FieldDef {
-  key: CoordinateField;
+  key: FieldKey;
   label: string;
   required: boolean;
+  /**
+   * Header text that identifies this field. Fields are matched in the order
+   * they are declared, so put the specific patterns first — "northing" must be
+   * offered a header before a bare "north" pattern can claim it.
+   */
+  pattern?: RegExp;
+  /** Column index used when the file has no header to match against. */
+  position?: number;
+  /** Numbers are parsed; text is kept as entered. Defaults to number. */
+  type?: "text" | "number";
+  /** Placeholder for this field's input in a caller's table. */
+  placeholder?: string;
 }
 
 /** Column index chosen for each field (null = not mapped). */
-export type ColumnMapping = Record<CoordinateField, number | null>;
+export type ColumnMapping = Record<FieldKey, number | null>;
 
-export interface MappedCoordinate {
-  point: string;
-  northing: number | null;
-  easting: number | null;
-  elevation: number | null;
-}
+/** One re-derived row, keyed by field. */
+export type MappedRow = Record<FieldKey, string | number | null>;
 
 export interface DetectedColumns {
   hasHeader: boolean;
@@ -40,16 +52,7 @@ export interface DetectedColumns {
 }
 
 const HEADER_KEYWORDS =
-  /point|\bpt\b|\bid\b|name|station|gcp|east|north|northing|easting|elev|elevation|height|level|\bz\b/i;
-
-const FIELD_PATTERNS: Record<CoordinateField, RegExp> = {
-  // Order matters at call sites, but each pattern is specific enough to stand
-  // alone. "northing"/"easting" win over a bare "north"/"east".
-  id: /point|\bpt\b|\bid\b|name|station|gcp/i,
-  northing: /north/i,
-  easting: /east/i,
-  elevation: /elev|height|level|\bz\b/i,
-};
+  /point|\bpt\b|\bid\b|name|station|gcp|east|north|northing|easting|elev|elevation|height|level|\bz\b|sight|chainage|dist|bearing|deg|min|sec|angle|rise|fall/i;
 
 const looksNumeric = (v: unknown): boolean => {
   if (v === undefined || v === null) return false;
@@ -62,7 +65,9 @@ function isHeaderRow(row: string[] | undefined): boolean {
   if (!row || !row.length) return false;
   const joined = row.join(" ");
   if (HEADER_KEYWORDS.test(joined)) return true;
-  // If the coordinate columns don't look numeric but there's text, treat as header.
+  // If the leading value columns don't look numeric but there's text, treat as
+  // a header. Column 0 is skipped: it is usually a point or station name, and
+  // is non-numeric in the header and the data alike.
   const numericCount = [1, 2, 3].reduce(
     (c, i) => c + (looksNumeric(row[i]) ? 1 : 0),
     0,
@@ -90,20 +95,21 @@ export function detectColumns(rows: string[][]): DetectedColumns {
 }
 
 /**
- * Best-guess mapping. Matches header names when present; otherwise falls back
- * to the app's historical positional order (ID, Easting, Northing, Elevation).
+ * Best-guess mapping. Matches header names when present, then falls back to
+ * each field's declared position for anything still unmapped.
  */
 export function autoDetectMapping(
   detected: DetectedColumns,
   fields: FieldDef[],
 ): ColumnMapping {
-  const mapping = emptyMapping();
+  const mapping = emptyMapping(fields);
   const used = new Set<number>();
 
   if (detected.hasHeader) {
     for (const field of fields) {
+      if (!field.pattern) continue;
       const idx = detected.headers.findIndex(
-        (h, i) => !used.has(i) && FIELD_PATTERNS[field.key].test(h),
+        (h, i) => !used.has(i) && field.pattern!.test(h),
       );
       if (idx !== -1) {
         mapping[field.key] = idx;
@@ -112,17 +118,10 @@ export function autoDetectMapping(
     }
   }
 
-  // Positional fallback for anything still unmapped.
-  const positional: Record<CoordinateField, number> = {
-    id: 0,
-    easting: 1,
-    northing: 2,
-    elevation: 3,
-  };
   for (const field of fields) {
     if (mapping[field.key] !== null) continue;
-    const idx = positional[field.key];
-    if (idx < detected.columnCount && !used.has(idx)) {
+    const idx = field.position;
+    if (idx !== undefined && idx < detected.columnCount && !used.has(idx)) {
       mapping[field.key] = idx;
       used.add(idx);
     }
@@ -131,8 +130,10 @@ export function autoDetectMapping(
   return mapping;
 }
 
-export function emptyMapping(): ColumnMapping {
-  return { id: null, northing: null, easting: null, elevation: null };
+export function emptyMapping(fields: FieldDef[]): ColumnMapping {
+  const mapping: ColumnMapping = {};
+  for (const field of fields) mapping[field.key] = null;
+  return mapping;
 }
 
 /** Required fields that have no column assigned. */
@@ -140,7 +141,27 @@ export function unmappedRequiredFields(
   mapping: ColumnMapping,
   fields: FieldDef[],
 ): FieldDef[] {
-  return fields.filter((f) => f.required && mapping[f.key] === null);
+  return fields.filter((f) => f.required && mapping[f.key] == null);
+}
+
+/**
+ * The fields in the order their source columns appear in the file, so a table
+ * built from this mirrors the layout the surveyor uploaded. Swapping two
+ * fields in the mapper reorders the table with them. Unmapped fields keep
+ * their declared order and sort last — they have no column to sit beside.
+ */
+export function orderedFields(
+  fields: FieldDef[],
+  mapping: ColumnMapping,
+): FieldDef[] {
+  return [...fields].sort((a, b) => {
+    const ai = mapping[a.key];
+    const bi = mapping[b.key];
+    if (ai == null && bi == null) return fields.indexOf(a) - fields.indexOf(b);
+    if (ai == null) return 1;
+    if (bi == null) return -1;
+    return ai - bi;
+  });
 }
 
 const toNumber = (v: unknown): number | null => {
@@ -149,32 +170,91 @@ const toNumber = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-/** Re-derive coordinate rows from the chosen mapping. */
+/** Re-derive rows from the chosen mapping, keyed by field. */
 export function applyMapping(
   dataRows: string[][],
   mapping: ColumnMapping,
-): MappedCoordinate[] {
-  const cell = (row: string[], key: CoordinateField): string => {
-    const idx = mapping[key];
-    return idx === null ? "" : String(row[idx] ?? "").trim();
-  };
-
+  fields: FieldDef[],
+): MappedRow[] {
   return dataRows
-    .map((row) => ({
-      point: cell(row, "id"),
-      northing: toNumber(cell(row, "northing")),
-      easting: toNumber(cell(row, "easting")),
-      elevation: toNumber(cell(row, "elevation")),
-    }))
+    .map((row) => {
+      const out: MappedRow = {};
+      for (const field of fields) {
+        const idx = mapping[field.key];
+        const raw = idx == null ? "" : String(row[idx] ?? "").trim();
+        out[field.key] = field.type === "text" ? raw : toNumber(raw);
+      }
+      return out;
+    })
     // Drop rows that carry no usable data at all.
-    .filter(
-      (r) =>
-        r.point !== "" ||
-        r.northing !== null ||
-        r.easting !== null ||
-        r.elevation !== null,
+    .filter((r) =>
+      fields.some((f) => {
+        const v = r[f.key];
+        return v !== null && v !== "";
+      }),
     );
 }
+
+// ---------------------------------------------------------------------------
+// Field presets
+// ---------------------------------------------------------------------------
+
+/**
+ * Positions are the app's historical column order for a coordinate file
+ * (ID, Easting, Northing, Elevation), used when a file has no header.
+ */
+export const ID_FIELD: FieldDef = {
+  key: "id",
+  label: "Point ID",
+  required: true,
+  pattern: /point|\bpt\b|\bid\b|name|station|gcp/i,
+  position: 0,
+  type: "text",
+};
+
+export const EASTING_FIELD: FieldDef = {
+  key: "easting",
+  label: "Easting",
+  required: true,
+  pattern: /east/i,
+  position: 1,
+};
+
+export const NORTHING_FIELD: FieldDef = {
+  key: "northing",
+  label: "Northing",
+  required: true,
+  pattern: /north/i,
+  position: 2,
+};
+
+export const ELEVATION_FIELD: FieldDef = {
+  key: "elevation",
+  label: "Elevation",
+  required: false,
+  pattern: /elev|height|level|\bz\b/i,
+  position: 3,
+};
+
+/** ID / Northing / Easting, with elevation optional unless overridden. */
+export const COORDINATE_FIELDS: FieldDef[] = [
+  ID_FIELD,
+  NORTHING_FIELD,
+  EASTING_FIELD,
+];
+
+export const COORDINATE_FIELDS_WITH_ELEVATION: FieldDef[] = [
+  ID_FIELD,
+  NORTHING_FIELD,
+  EASTING_FIELD,
+  ELEVATION_FIELD,
+];
+
+/** Marks a preset field required or optional without mutating the preset. */
+export const asRequired = (field: FieldDef, required = true): FieldDef => ({
+  ...field,
+  required,
+});
 
 // ---------------------------------------------------------------------------
 // Session persistence — remember the mapping for files with the same shape so
@@ -183,12 +263,20 @@ export function applyMapping(
 
 const STORAGE_KEY = "autoplan.columnMappings";
 
-/** A signature that groups "similar" files (same columns / headers). */
-export function mappingSignature(detected: DetectedColumns): string {
+/**
+ * A signature that groups "similar" files (same columns / headers). The field
+ * keys are part of it: the same file uploaded to a coordinate table and to a
+ * levelling sheet is not the same mapping.
+ */
+export function mappingSignature(
+  detected: DetectedColumns,
+  fields: FieldDef[] = [],
+): string {
   const shape = detected.hasHeader
     ? detected.headers.join("|").toLowerCase()
     : `positional:${detected.columnCount}`;
-  return `${detected.columnCount}::${shape}`;
+  const shapeKey = fields.map((f) => f.key).join(",");
+  return `${detected.columnCount}::${shape}::${shapeKey}`;
 }
 
 type MappingStore = Record<string, ColumnMapping>;

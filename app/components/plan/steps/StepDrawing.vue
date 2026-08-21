@@ -140,6 +140,9 @@
         Failed to compute boundary distances and bearings.
       </div>
       <template v-else-if="boundaryLegs.length">
+        <div class="flex justify-end">
+          <CoordinatePrecisionSelector v-model="coordinatePrecision" />
+        </div>
         <div
           class="overflow-x-auto border border-gray-200 dark:border-slate-700 rounded"
         >
@@ -163,8 +166,8 @@
                 <td class="px-2 py-1"></td>
                 <td class="px-2 py-1"></td>
                 <td class="px-2 py-1"></td>
-                <td class="px-2 py-1">{{ boundaryLegs[0].from.easting }}</td>
-                <td class="px-2 py-1">{{ boundaryLegs[0].from.northing }}</td>
+                <td class="px-2 py-1">{{ formatCoordinateValue(boundaryLegs[0].from.easting) }}</td>
+                <td class="px-2 py-1">{{ formatCoordinateValue(boundaryLegs[0].from.northing) }}</td>
                 <td class="px-2 py-1">{{ boundaryLegs[0].from.id }}</td>
               </tr>
               <tr
@@ -178,8 +181,8 @@
                 </td>
                 <td class="px-2 py-1">{{ leg.delta_easting }}</td>
                 <td class="px-2 py-1">{{ leg.delta_northing }}</td>
-                <td class="px-2 py-1">{{ leg.to.easting }}</td>
-                <td class="px-2 py-1">{{ leg.to.northing }}</td>
+                <td class="px-2 py-1">{{ formatCoordinateValue(leg.to.easting) }}</td>
+                <td class="px-2 py-1">{{ formatCoordinateValue(leg.to.northing) }}</td>
                 <td class="px-2 py-1">{{ leg.to.id }}</td>
               </tr>
             </tbody>
@@ -224,6 +227,9 @@ import {
   RiInformationLine,
 } from "@remixicon/vue";
 import axios from "axios";
+import { useCoordinatePrecision } from "~/composables/useCoordinatePrecision";
+
+const { coordinatePrecision, formatCoordinateValue } = useCoordinatePrecision();
 
 type CoordInput = {
   point: string;

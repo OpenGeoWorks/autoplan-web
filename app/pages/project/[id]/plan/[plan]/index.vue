@@ -24,6 +24,8 @@
                         ? 'forward-computation'
                         : computationType === 'traverse'
                         ? 'traverse-computation'
+                        : computationType === 'back'
+                        ? 'back-computation'
                         : 'differential-leveling'
                     }`
                   )
@@ -259,6 +261,14 @@
                   {{ planData.basic.type || "—" }}
                 </div>
               </div>
+              <div v-else>
+                <div class="text-gray-500 dark:text-gray-400">
+                  Computation Type
+                </div>
+                <div class="text-gray-800 dark:text-gray-100">
+                  {{ computationView?.typeLabel || "—" }}
+                </div>
+              </div>
               <div v-if="!isComputationOnly">
                 <div class="text-gray-500 dark:text-gray-400">
                   Personnel Name
@@ -278,6 +288,100 @@
             </div>
           </div>
 
+          <!-- Saved computation data -->
+          <div
+            v-if="isComputationOnly"
+            class="bg-white dark:bg-slate-800 rounded-lg shadow p-6"
+          >
+            <div class="flex items-center mb-4">
+              <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
+                Computation Data
+              </h2>
+              <CoordinatePrecisionSelector
+                v-if="showsCoordinatePrecision"
+                v-model="coordinatePrecision"
+                class="ml-auto"
+              />
+            </div>
+
+            <div
+              v-if="computationView?.summary.length"
+              class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4"
+            >
+              <div v-for="s in computationView.summary" :key="s.label">
+                <div class="text-gray-500 dark:text-gray-400">{{ s.label }}</div>
+                <div class="text-gray-800 dark:text-gray-100">{{ s.value }}</div>
+              </div>
+            </div>
+
+            <div v-if="computationView" class="space-y-5">
+              <div
+                v-for="section in computationView.sections"
+                :key="section.title"
+              >
+                <div class="flex items-center mb-2">
+                  <h3
+                    class="text-sm font-medium text-gray-700 dark:text-gray-200"
+                  >
+                    {{ section.title }}
+                  </h3>
+                  <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                    ({{ section.rows.length }})
+                  </span>
+                </div>
+                <div
+                  class="overflow-x-auto border border-gray-200 dark:border-slate-700 rounded"
+                >
+                  <table class="min-w-full text-xs">
+                    <thead class="bg-gray-50 dark:bg-slate-700/50">
+                      <tr class="text-left text-gray-600 dark:text-gray-300">
+                        <th
+                          v-for="column in section.columns"
+                          :key="column"
+                          class="px-3 py-2 font-medium"
+                        >
+                          {{ column }}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="(row, rowIndex) in section.rows"
+                        :key="rowIndex"
+                        class="border-t border-gray-100 dark:border-slate-700/60"
+                      >
+                        <td
+                          v-for="(cell, cellIndex) in row"
+                          :key="cellIndex"
+                          class="px-3 py-1.5 font-mono text-gray-800 dark:text-gray-100"
+                        >
+                          {{ cell }}
+                        </td>
+                      </tr>
+                      <tr v-if="!section.rows.length">
+                        <td
+                          :colspan="section.columns.length"
+                          class="px-3 py-4 text-center text-gray-400"
+                        >
+                          No saved rows.
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div
+                v-if="!computationView.sections.length"
+                class="text-sm text-gray-500 dark:text-gray-400"
+              >
+                This computation has no data saved.
+              </div>
+            </div>
+            <div v-else class="text-sm text-gray-500 dark:text-gray-400">
+              No saved computation data is available for this record.
+            </div>
+          </div>
+
           <!-- Coordinates -->
           <div
             v-if="!isComputationOnly"
@@ -293,22 +397,7 @@
                 >({{ planData.coordinates.length }})</span
               >
               <div class="ml-auto flex items-center gap-2">
-                <label class="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-                  <span class="hidden sm:inline">Precision</span>
-                  <select
-                    v-model="coordinatePrecision"
-                    class="text-xs px-2 py-1 border rounded bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-200"
-                    title="Display precision (does not affect stored values or CSV export)"
-                  >
-                    <option
-                      v-for="opt in COORDINATE_PRECISION_OPTIONS"
-                      :key="opt.value"
-                      :value="opt.value"
-                    >
-                      {{ opt.label }}
-                    </option>
-                  </select>
-                </label>
+                <CoordinatePrecisionSelector v-model="coordinatePrecision" />
                 <button
                   @click="exportCoordinates"
                   class="text-xs px-2 py-1 border rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700"
@@ -660,14 +749,9 @@ import { ref, reactive, onMounted, computed, watch } from "vue";
 import { useRoute } from "vue-router";
 import { navigateTo } from "#imports";
 import axios from "axios";
+import { generatePlan as requestPlanGeneration } from "~/composables/usePlanGeneration";
+import { useCoordinatePrecision } from "~/composables/useCoordinatePrecision";
 import { formatPlanOrigin } from "~/utils/planOrigins";
-import {
-  formatCoordinate,
-  COORDINATE_PRECISION_OPTIONS,
-  loadCoordinatePrecision,
-  saveCoordinatePrecision,
-  type CoordinatePrecision,
-} from "~/utils/formatCoordinate";
 
 const route = useRoute();
 const toast = useToast();
@@ -678,8 +762,7 @@ const initialLoading = ref(true);
 const showDeleteModal = ref(false);
 const showEditEmbellishmentModal = ref(false);
 const showAllCoordinates = ref(false);
-const coordinatePrecision = ref<CoordinatePrecision>(loadCoordinatePrecision());
-watch(coordinatePrecision, (p) => saveCoordinatePrecision(p));
+const { coordinatePrecision, formatCoordinateValue } = useCoordinatePrecision();
 const showConvertModal = ref(false);
 
 const topographicSettings = ref<any>(null);
@@ -690,6 +773,208 @@ const footerSize = ref<number | null>(null);
 const isComputationOnly = ref(false);
 const computationType = ref<string | null>(null);
 const computationData = ref<any>(null);
+const showsCoordinatePrecision = computed(() =>
+  ["back", "forward", "traverse"].includes(computationType.value ?? ""),
+);
+
+/**
+ * A computation-only plan has no coordinates, parcels or embellishments to
+ * show, so every section below is hidden for one and the page was left with
+ * just a name. This renders whatever the computation actually holds, in one
+ * shape the template can lay out without knowing the type.
+ */
+const dms = (b: any): string =>
+  b ? `${b.degrees ?? 0}° ${b.minutes ?? 0}' ${Number(b.seconds ?? 0).toFixed(2)}"` : "—";
+
+const num = (v: any, d = 3): string =>
+  v === null || v === undefined || v === "" || isNaN(Number(v))
+    ? "—"
+    : Number(v).toFixed(d);
+
+const correctionStatus = (value: unknown): string =>
+  typeof value === "boolean" ? (value ? "Applied" : "Not applied") : "—";
+
+interface ComputationSection {
+  title: string;
+  columns: string[];
+  rows: string[][];
+}
+
+const computationView = computed(() => {
+  const data = computationData.value;
+  if (!data) return null;
+
+  if (computationType.value === "back") {
+    const points = Array.isArray(data.points) ? data.points : [];
+    return {
+      typeLabel: "Back Computation",
+      summary: [
+        { label: "Points", value: String(points.length) },
+        { label: "Ring", value: data.close_ring === false ? "Open traverse" : "Closed" },
+      ],
+      sections: [
+        {
+          title: "Known Coordinates",
+          columns: ["Point ID", "Northing (mN)", "Easting (mE)", "Elevation (m)"],
+          rows: points.map((p: any) => [
+            p.id ?? "—",
+            formatNumber(p.northing),
+            formatNumber(p.easting),
+            num(p.elevation),
+          ]),
+        },
+      ],
+    };
+  }
+
+  if (computationType.value === "forward") {
+    const legs = Array.isArray(data.legs) ? data.legs : [];
+    const coordinates = Array.isArray(data.coordinates)
+      ? data.coordinates
+      : data.start
+        ? [data.start]
+        : [];
+    const legacyRows = Array.isArray(data.traverseRows)
+      ? data.traverseRows
+      : [];
+    const sections: ComputationSection[] = [];
+
+    if (coordinates.length || !legacyRows.length) {
+      sections.push({
+        title: "Coordinates",
+        columns: ["Point ID", "Northing (mN)", "Easting (mE)"],
+        rows: coordinates.map((point: any) => [
+          point.id ?? "—",
+          formatNumber(point.northing),
+          formatNumber(point.easting),
+        ]),
+      });
+      sections.push({
+        title: "Observed Legs",
+        columns: ["From", "To", "Bearing", "Distance (m)"],
+        rows: legs.map((leg: any) => [
+          leg.from?.id ?? "—",
+          leg.to?.id ?? "—",
+          dms(leg.bearing),
+          num(leg.distance),
+        ]),
+      });
+    } else {
+      sections.push({
+        title: "Computation Rows",
+        columns: [
+          "Point ID",
+          "Distance (m)",
+          "Bearing",
+          "Departure",
+          "Latitude",
+          "Northing (mN)",
+          "Easting (mE)",
+        ],
+        rows: legacyRows.map((row: any) => [
+          row.pointId ?? "—",
+          num(row.distance),
+          dms({
+            degrees: row.degrees,
+            minutes: row.minutes,
+            seconds: row.seconds,
+          }),
+          num(row.departure),
+          num(row.latitude),
+          formatNumber(row.northing),
+          formatNumber(row.easting),
+        ]),
+      });
+    }
+
+    return {
+      typeLabel: "Forward Computation",
+      summary: [
+        { label: "Start", value: data.start?.id ?? "—" },
+        { label: "Coordinates", value: String(coordinates.length) },
+        { label: "Legs", value: String(legs.length || legacyRows.length) },
+        {
+          label: "Misclosure correction",
+          value: correctionStatus(data.misclosure_correction),
+        },
+      ],
+      sections,
+    };
+  }
+
+  if (computationType.value === "traverse") {
+    const coordinates = Array.isArray(data.coordinates) ? data.coordinates : [];
+    const legs = Array.isArray(data.legs) ? data.legs : [];
+    return {
+      typeLabel: "Traverse Computation",
+      summary: [
+        { label: "Control points", value: String(coordinates.length) },
+        { label: "Legs", value: String(legs.length) },
+        {
+          label: "Misclosure correction",
+          value: correctionStatus(data.misclosure_correction),
+        },
+      ],
+      sections: [
+        {
+          title: "Control Points",
+          columns: ["Point ID", "Northing (mN)", "Easting (mE)"],
+          rows: coordinates.map((point: any) => [
+            point.id ?? "—",
+            formatNumber(point.northing),
+            formatNumber(point.easting),
+          ]),
+        },
+        {
+          title: "Observed Legs",
+          columns: ["From", "To", "Observed Angle", "Distance (m)"],
+          rows: legs.map((leg: any) => [
+            leg.from?.id ?? "—",
+            leg.to?.id ?? "—",
+            dms(leg.observed_angle),
+            num(leg.distance),
+          ]),
+        },
+      ],
+    };
+  }
+
+  if (computationType.value === "differential-leveling") {
+    const stations = Array.isArray(data.stations) ? data.stations : [];
+    return {
+      typeLabel: "Differential Levelling",
+      summary: [
+        { label: "Stations", value: String(stations.length) },
+        { label: "Method", value: data.method ?? "—" },
+        {
+          label: "Misclosure correction",
+          value: correctionStatus(data.misclosure_correction),
+        },
+      ],
+      sections: [
+        {
+          title: "Levelling Stations",
+          columns: [
+            "Station",
+            "Back Sight (m)",
+            "Intermediate Sight (m)",
+            "Fore Sight (m)",
+            "Reduced Level (m)",
+          ],
+          rows: stations.map((station: any) => [
+            station.stn ?? "—",
+            num(station.back_sight),
+            num(station.intermediate_sight),
+            num(station.fore_sight),
+            num(station.reduced_level),
+          ]),
+        },
+      ],
+    };
+  }
+
+  return null;
+});
 
 const planData = reactive({
   basic: { name: "", type: "" },
@@ -756,6 +1041,9 @@ async function fetchPlanData() {
         } else if (data.traverse_computation_data) {
           computationType.value = "traverse";
           computationData.value = data.traverse_computation_data;
+        } else if (data.back_computation_data) {
+          computationType.value = "back";
+          computationData.value = data.back_computation_data;
         } else if (data.differential_leveling_data) {
           computationType.value = "differential-leveling";
           computationData.value = data.differential_leveling_data;
@@ -871,7 +1159,7 @@ function exportCoordinates() {
 // choice. Stored values, the CSV export and the plan payload keep full
 // precision.
 function formatNumber(v: number | string | null | undefined) {
-  return formatCoordinate(v, coordinatePrecision.value);
+  return formatCoordinateValue(v);
 }
 
 function formatOrigin(origin: string | null | undefined) {
@@ -906,7 +1194,7 @@ async function handleConvertToPlan(planType: string) {
     conversionState.loading = true;
     conversionState.error = null;
 
-    const response = await axios.post(`/plan/computation/convert/${planId}`, {
+    const response = await axios.put(`/plan/computation/convert/${planId}`, {
       type: planType,
     });
 
@@ -949,27 +1237,22 @@ async function generatePlan() {
     generationState.error = null;
     generationState.url = null;
 
-    const response = await axios.get(`/plan/generate/${planId}`);
+    const url = await requestPlanGeneration(planId);
+    generationState.url = url;
 
-    if (response.data?.error === false && response.data?.data?.url) {
-      generationState.url = response.data.data.url;
+    // Create a temporary anchor element to trigger download
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `plan_${planData.basic.name || planId}.zip`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 
-      // Create a temporary anchor element to trigger download
-      const link = document.createElement("a");
-      link.href = response.data.data.url;
-      link.download = `plan_${planData.basic.name || planId}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      toast?.add?.({
-        title: "Plan generated successfully!",
-        description: "Your plan package has been downloaded.",
-        color: "success",
-      });
-    } else {
-      throw new Error("Invalid response format");
-    }
+    toast?.add?.({
+      title: "Plan generated successfully!",
+      description: "Your plan package has been downloaded.",
+      color: "success",
+    });
   } catch (error: any) {
     console.error("Plan generation error:", error);
     const errorMessage =

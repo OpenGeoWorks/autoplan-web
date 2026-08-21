@@ -312,6 +312,7 @@
     :show="showResultsModal"
     :results="computationResults || null"
     :method="computedMethod"
+    :misclosure-correction="computedMisclosureCorrection"
     @close="showResultsModal = false"
   />
 
@@ -359,6 +360,7 @@ const showResultsModal = ref(false);
 const computedMethod = ref<"height-of-instrument" | "rise-and-fall">(
   "height-of-instrument"
 );
+const computedMisclosureCorrection = ref(true);
 const computationResults = ref<any>(null);
 const computationError = ref("");
 const isComputing = ref(false);
@@ -456,6 +458,7 @@ const performComputation = async () => {
     // Show the results in a modal instead of prefilling the input table,
     // so the original uploaded data stays intact for re-computation.
     computedMethod.value = levelingMethod.value;
+    computedMisclosureCorrection.value = misclosureCorrection.value;
     showResultsModal.value = true;
 
     toast.add({
@@ -601,7 +604,8 @@ const saveComputation = async (name: string) => {
 
     // Step 2: Save differential leveling data
     const levelingData = {
-      method: levelingMethod.value,
+      method: computedMethod.value,
+      misclosure_correction: computedMisclosureCorrection.value,
       stations: levelingRows.value
         .filter((row) => row.station && row.station.trim() !== "")
         .map((row) => {

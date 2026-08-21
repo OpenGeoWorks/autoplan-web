@@ -497,6 +497,7 @@
     :show="showResultsModal"
     :results="computationResults?.data || null"
     :method="computedMethod"
+    :misclosure-correction="computedMisclosureCorrection"
     :can-save="true"
     @save="onSaveLeveling"
     @close="showResultsModal = false"
@@ -567,6 +568,7 @@ const choiceSubmitting = ref(false);
 const computedMethod = ref<"height-of-instrument" | "rise-and-fall">(
   "height-of-instrument"
 );
+const computedMisclosureCorrection = ref(true);
 const computationResults = ref<any>(null);
 const computationError = ref("");
 const isLoading = ref(true);
@@ -736,6 +738,7 @@ const performComputation = async () => {
     // Show the results in a modal instead of prefilling the input table, so the
     // saved data stays intact when editing an existing computation.
     computedMethod.value = levelingMethod.value;
+    computedMisclosureCorrection.value = misclosureCorrection.value;
     showResultsModal.value = true;
 
     // Save the table data to the plan
@@ -950,7 +953,7 @@ const downloadLevelingTemplate = () => {
 // Rebuild the leveling data payload (input readings only) for saving.
 const buildLevelingSavePayload = () => ({
   method: computedMethod.value,
-  misclosure_correction: misclosureCorrection.value,
+  misclosure_correction: computedMisclosureCorrection.value,
   stations: levelingRows.value
     .filter((row) => row.stn && row.stn.trim() !== "")
     .map((row) => {

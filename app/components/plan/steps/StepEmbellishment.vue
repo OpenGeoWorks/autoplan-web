@@ -190,12 +190,14 @@
           <label
             class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
             >Title Size
-            <InfoTip text="Text height of the plan title, in metres on the ground. Computed automatically from your drawing's size — only adjust if the title looks too big or small." /></label
+            <InfoTip text="Printed height of the plan title, in millimetres on the sheet. Moves the title block only — the area, origin and scale bar follow it, and the rest of the plan is unaffected. Default 5 mm." /></label
           >
           <input
             v-model.number="local.embellishment.font_size"
             type="number"
-            min="6"
+            step="0.5"
+            min="2"
+            max="14"
             class="w-full text-sm rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
@@ -221,13 +223,14 @@
           <label
             class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
             >Beacon Size
-            <InfoTip text="Size of the beacon symbols drawn at survey pillars, in metres on the ground. Computed automatically from your drawing's size so the symbol prints at about 1.6 mm on the sheet." /></label
+            <InfoTip text="Printed width of the beacon symbols drawn at survey pillars, in millimetres on the sheet. Symbols only — beacon names are set by Label Size. Default 1.6 mm." /></label
           >
           <input
             v-model.number="local.embellishment.beacon_size"
             type="number"
             step="0.1"
-            min="0.1"
+            min="0.5"
+            max="8"
             class="w-full text-sm rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
@@ -235,13 +238,14 @@
           <label
             class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
             >Label Size
-            <InfoTip text="Text height of beacon names and bearing/distance labels, in metres on the ground. Computed automatically from your drawing's size." /></label
+            <InfoTip text="Printed height of the annotation on the map itself — beacon names, bearings and distances, quoted coordinates, spot heights and schedule text — in millimetres on the sheet. The surveyor's defaults are already legible at every scale, so this rarely needs changing. Default 2.5 mm." /></label
           >
           <input
             v-model.number="local.embellishment.label_size"
             type="number"
-            step="0.1"
-            min="0.1"
+            step="0.5"
+            min="2"
+            max="14"
             class="w-full text-sm rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
@@ -360,6 +364,59 @@
       </div>
     </div>
 
+    <!-- Plan Tables -->
+    <div
+      v-if="supportsTables"
+      class="bg-gray-50 dark:bg-slate-900/40 rounded-md border border-gray-200 dark:border-slate-700 p-4 space-y-4"
+    >
+      <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+        Plan Tables
+      </h3>
+      <p class="text-xs text-gray-500 dark:text-gray-400 -mt-2">
+        Print schedules on the sheet so the drawing is self-contained for
+        submission. They are placed down the right-hand side of the sheet and
+        the drawing is sized to leave room for them.
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <label
+          class="flex items-start gap-3 rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-2 cursor-pointer"
+        >
+          <input
+            v-model="local.embellishment.show_bearing_distance_table"
+            type="checkbox"
+            class="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span>
+            <span
+              class="block text-sm font-medium text-gray-900 dark:text-gray-100"
+              >Bearing &amp; distance table</span
+            >
+            <span class="block text-xs text-gray-500 dark:text-gray-400">{{
+              bearingTableHint
+            }}</span>
+          </span>
+        </label>
+        <label
+          class="flex items-start gap-3 rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-2 cursor-pointer"
+        >
+          <input
+            v-model="local.embellishment.show_coordinate_table"
+            type="checkbox"
+            class="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span>
+            <span
+              class="block text-sm font-medium text-gray-900 dark:text-gray-100"
+              >Coordinate table</span
+            >
+            <span class="block text-xs text-gray-500 dark:text-gray-400">{{
+              coordinateTableHint
+            }}</span>
+          </span>
+        </label>
+      </div>
+    </div>
+
     <!-- Footers -->
     <div
       class="bg-gray-50 dark:bg-slate-900/40 rounded-md border border-gray-200 dark:border-slate-700 p-4 space-y-4"
@@ -416,13 +473,14 @@
         <label
           class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
           >Footer Size
-          <InfoTip text="Text height inside the footer boxes (certificates, property description) at the bottom of the plan." /></label
+          <InfoTip text="Printed height of the footer text — certificates, property description, plan number and surveyor's name — in millimetres on the sheet. Default 2.5 mm." /></label
         >
         <input
           v-model.number="local.embellishment.footer_size"
           type="number"
-          step="0.1"
-          min="0.1"
+          step="0.5"
+          min="2"
+          max="14"
           class="w-full text-sm rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
@@ -469,19 +527,55 @@ interface EmbellishmentState {
   dxf_version: string;
   footers: string[];
   footer_size: number;
+  show_bearing_distance_table: boolean;
+  show_coordinate_table: boolean;
 }
 
 const props = defineProps<{
   modelValue: { embellishment: EmbellishmentState };
   loading?: boolean;
+  planType?: string;
 }>();
 const emit = defineEmits(["update:modelValue", "complete", "refresh"]);
+
+/**
+ * The four size controls are printed millimetres on the sheet, and each one
+ * governs a single group: Title Size the title block, Label Size the map
+ * annotation, Footer Size the footer text, Beacon Size the symbols. These
+ * defaults are the drawing engine's designed sizes, so the form shows what
+ * the plan will actually be drawn at.
+ */
+const DEFAULT_SIZES = {
+  font_size: 5,
+  label_size: 2.5,
+  footer_size: 2.5,
+  beacon_size: 1.6,
+} as const;
+
+/**
+ * These fields used to hold ground metres (label_size 0.25, beacon_size 0.18)
+ * and the API also wrote extent-derived fractions into them. Anything that
+ * small is not a printed size, and the engine reads it as "unset" — so show
+ * the default the plan is really drawn at rather than a stale number the user
+ * cannot make sense of.
+ */
+const LEGACY_TEXT_MM = 2;
+const LEGACY_BEACON_MM = 0.5;
+
+const printedSize = (
+  value: unknown,
+  fallback: number,
+  floor: number
+): number => {
+  const size = Number(value);
+  return Number.isFinite(size) && size >= floor ? size : fallback;
+};
 
 const local = reactive<{ embellishment: EmbellishmentState }>({
   embellishment: {
     name: "",
     font: "Arial",
-    font_size: 1,
+    font_size: DEFAULT_SIZES.font_size,
     title: "",
     address: "",
     local_govt: "",
@@ -490,28 +584,68 @@ const local = reactive<{ embellishment: EmbellishmentState }>({
     origin: "utm_zone_31",
     scale: 1,
     beacon_type: "none",
-    beacon_size: 0.18,
-    label_size: 0.25,
+    beacon_size: DEFAULT_SIZES.beacon_size,
+    label_size: DEFAULT_SIZES.label_size,
     personel_name: "",
     surveyor_name: "",
     page_size: "A4",
     page_orientation: "portrait",
     dxf_version: "R2018",
     footers: [""],
-    footer_size: 1,
+    footer_size: DEFAULT_SIZES.footer_size,
+    show_bearing_distance_table: false,
+    show_coordinate_table: false,
   },
+});
+
+// Route sheets are longitudinal profiles, not maps: they carry no parcel or
+// boundary schedule, so the option is hidden rather than shown doing nothing.
+const supportsTables = computed(() =>
+  ["cadastral", "topographic", "layout"].includes(props.planType ?? "cadastral")
+);
+
+const bearingTableHint = computed(() =>
+  props.planType === "cadastral"
+    ? "Every parcel leg, with its bearing and distance."
+    : "Every boundary leg, with its bearing and distance."
+);
+
+const coordinateTableHint = computed(() => {
+  if (props.planType === "layout")
+    return "Site boundary corners and the plot-corner register.";
+  if (props.planType === "topographic") return "The boundary beacon register.";
+  return "The beacon coordinate register.";
 });
 
 watch(
   () => props.modelValue,
   (v) => {
     if (v?.embellishment) {
+      const saved = v.embellishment;
       local.embellishment = {
         ...local.embellishment,
-        ...v.embellishment,
-        footers: v.embellishment.footers?.length
-          ? v.embellishment.footers
-          : [""],
+        ...saved,
+        footers: saved.footers?.length ? saved.footers : [""],
+        font_size: printedSize(
+          saved.font_size,
+          DEFAULT_SIZES.font_size,
+          LEGACY_TEXT_MM
+        ),
+        label_size: printedSize(
+          saved.label_size,
+          DEFAULT_SIZES.label_size,
+          LEGACY_TEXT_MM
+        ),
+        footer_size: printedSize(
+          saved.footer_size,
+          DEFAULT_SIZES.footer_size,
+          LEGACY_TEXT_MM
+        ),
+        beacon_size: printedSize(
+          saved.beacon_size,
+          DEFAULT_SIZES.beacon_size,
+          LEGACY_BEACON_MM
+        ),
       };
     }
   },

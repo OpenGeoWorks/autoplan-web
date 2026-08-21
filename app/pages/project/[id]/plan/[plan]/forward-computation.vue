@@ -128,14 +128,21 @@
                   Latitude
                 </th> -->
                 <th
-                  class="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300 min-w-[180px]"
+                  v-for="col in coordColumns"
+                  :key="col.key"
+                  draggable="true"
+                  :title="`Drag to swap the Easting and Northing columns`"
+                  class="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300 cursor-grab active:cursor-grabbing select-none"
+                  :class="[
+                    dragKey === col.key ? 'opacity-40' : '',
+                    overKey === col.key ? 'bg-blue-100 dark:bg-blue-900/40' : '',
+                  ]"
+                  @dragstart="onHeaderDragStart(col.key)"
+                  @dragover.prevent="onHeaderDragOver(col.key)"
+                  @drop.prevent="onHeaderDrop(col.key)"
+                  @dragend="onHeaderDragEnd"
                 >
-                  Easting(mE)
-                </th>
-                <th
-                  class="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300 min-w-[180px]"
-                >
-                  Northing(mN)
+                  {{ col.label }}
                 </th>
                 <th
                   class="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300 min-w-[150px]"
@@ -228,22 +235,14 @@
                     "
                   />
                 </td> -->
-                <td class="py-3 px-4">
+                <td v-for="col in coordColumns" :key="col.key" class="py-3 px-4">
                   <input
-                    v-model.number="row.easting"
+                    :value="(row as any)[col.key]"
                     type="number"
                     step="0.001"
+                    :placeholder="col.placeholder"
                     class="w-full px-2 py-1 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500"
-                    placeholder="0.000"
-                  />
-                </td>
-                <td class="py-3 px-4">
-                  <input
-                    v-model.number="row.northing"
-                    type="number"
-                    step="0.001"
-                    class="w-full px-2 py-1 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500"
-                    placeholder="0.000"
+                    @input="setCoordCell(row, col, ($event.target as HTMLInputElement).value)"
                   />
                 </td>
                 <td class="py-3 px-4">
@@ -937,6 +936,38 @@ const triggerForwardFile = () => {
 };
 
 import { parseTable } from "~/composables/useSheetParser";
+import {
+  NORTHING_FIELD,
+  EASTING_FIELD,
+  type FieldDef,
+} from "~/utils/columnMapping";
+import { useColumnOrder, applyStoredOrder } from "~/composables/useColumnOrder";
+
+// Only easting and northing move. Distance, the bearing parts, the derived
+// departure/latitude and the misclosures each mean one thing in one place, so
+// they stay put; surveyors only disagree about which of N/E comes first.
+const COORD_FIELDS: FieldDef[] = [
+  { ...EASTING_FIELD, label: "Easting(mE)", placeholder: "564836.710" },
+  { ...NORTHING_FIELD, label: "Northing(mN)", placeholder: "714206.422" },
+];
+
+const coordColumns = ref<FieldDef[]>(
+  applyStoredOrder("forward-coords", COORD_FIELDS),
+);
+
+const {
+  dragKey,
+  overKey,
+  onHeaderDragStart,
+  onHeaderDragOver,
+  onHeaderDrop,
+  onHeaderDragEnd,
+} = useColumnOrder("forward-coords", coordColumns);
+
+function setCoordCell(row: any, col: FieldDef, value: string) {
+  row[col.key] = value === "" ? null : Number(value);
+}
+
 
 const parseForwardCSV = async (input: string | ArrayBuffer | any) => {
   const rows = await parseTable(input);

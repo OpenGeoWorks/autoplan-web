@@ -4,8 +4,7 @@
  * Surveyors write coordinates as plain numbers — 735780, never 735,780 — so a
  * locale thousands separator is wrong here and a hazard when values are copied
  * into CAD or a spreadsheet. This helper formats without any grouping
- * separator and lets a user pick a display precision (decimal places or
- * significant figures).
+ * separator and lets a user pick a display precision in decimal places.
  *
  * It is DISPLAY-ONLY. The stored coordinates and the payload sent to plan
  * generation must never be rounded through this, or computed areas and
@@ -14,8 +13,7 @@
 
 export type CoordinatePrecision =
   | "raw"
-  | `dp:${number}`
-  | `sf:${number}`;
+  | `dp:${number}`;
 
 export interface CoordinatePrecisionOption {
   value: CoordinatePrecision;
@@ -30,29 +28,13 @@ export const COORDINATE_PRECISION_OPTIONS: CoordinatePrecisionOption[] = [
   { value: "dp:2", label: "2 d.p." },
   { value: "dp:3", label: "3 d.p." },
   { value: "dp:4", label: "4 d.p." },
-  { value: "sf:3", label: "3 s.f." },
-  { value: "sf:4", label: "4 s.f." },
-  { value: "sf:5", label: "5 s.f." },
-  { value: "sf:6", label: "6 s.f." },
+  { value: "dp:5", label: "5 d.p." },
+  { value: "dp:6", label: "6 d.p." },
 ];
 
 export const DEFAULT_COORDINATE_PRECISION: CoordinatePrecision = "raw";
 
 const STORAGE_KEY = "autoplan.coordinatePrecision";
-
-/** Round to `figures` significant figures and render in plain (non-exponential,
- * non-grouped) decimal notation, e.g. 735780 @ 3 s.f. -> "736000". */
-function toSignificantFigures(value: number, figures: number): string {
-  if (!Number.isFinite(value) || figures < 1) return String(value);
-  if (value === 0) return "0";
-
-  const digitsBeforePoint = Math.ceil(Math.log10(Math.abs(value)));
-  const decimals = figures - digitsBeforePoint;
-  const factor = Math.pow(10, decimals);
-  const rounded = Math.round(value * factor) / factor;
-  // Negative `decimals` means we rounded to tens/hundreds/… — no fractional part.
-  return rounded.toFixed(Math.max(decimals, 0));
-}
 
 /**
  * Format a single coordinate value for display. Never groups thousands.
@@ -77,7 +59,6 @@ export function formatCoordinate(
   if (!Number.isFinite(amount)) return String(n);
 
   if (mode === "dp") return n.toFixed(Math.max(0, Math.trunc(amount)));
-  if (mode === "sf") return toSignificantFigures(n, Math.max(1, Math.trunc(amount)));
   return String(n);
 }
 

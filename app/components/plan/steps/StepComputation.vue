@@ -27,6 +27,9 @@
       <div v-if="error" class="text-red-600">Failed to load computations.</div>
 
       <div v-if="traverse">
+        <div class="mb-2 flex justify-end">
+          <CoordinatePrecisionSelector v-model="coordinatePrecision" />
+        </div>
         <div class="overflow-x-auto">
           <table class="w-full table-auto border-collapse">
             <thead>
@@ -46,8 +49,8 @@
                 <td class="px-2 py-1"></td>
                 <td class="px-2 py-1"></td>
                 <td class="px-2 py-1"></td>
-                <td class="px-2 py-1">{{ legs[0].from.easting }}</td>
-                <td class="px-2 py-1">{{ legs[0].from.northing }}</td>
+                <td class="px-2 py-1">{{ formatCoordinateValue(legs[0].from.easting) }}</td>
+                <td class="px-2 py-1">{{ formatCoordinateValue(legs[0].from.northing) }}</td>
                 <td class="px-2 py-1">{{ legs[0].from.id }}</td>
               </tr>
               <tr v-for="(leg, i) in legs" :key="i" class="border-t">
@@ -57,8 +60,8 @@
                 </td>
                 <td class="px-2 py-1">{{ leg.delta_easting }}</td>
                 <td class="px-2 py-1">{{ leg.delta_northing }}</td>
-                <td class="px-2 py-1">{{ leg.to.easting }}</td>
-                <td class="px-2 py-1">{{ leg.to.northing }}</td>
+                <td class="px-2 py-1">{{ formatCoordinateValue(leg.to.easting) }}</td>
+                <td class="px-2 py-1">{{ formatCoordinateValue(leg.to.northing) }}</td>
                 <td class="px-2 py-1">{{ leg.to.id }}</td>
               </tr>
             </tbody>
@@ -77,20 +80,20 @@
           <div class="mt-1 ml-4">
             <span class="mr-4"
               ><strong>Min Northing:</strong>
-              {{ traverse.bounding_box?.min_northing }}</span
+              {{ formatCoordinateValue(traverse.bounding_box?.min_northing) }}</span
             >
             <span class="mr-4"
               ><strong>Max Northing:</strong>
-              {{ traverse.bounding_box?.max_northing }}</span
+              {{ formatCoordinateValue(traverse.bounding_box?.max_northing) }}</span
             >
             <br />
             <span class="mr-4"
               ><strong>Min Easting:</strong>
-              {{ traverse.bounding_box?.min_easting }}</span
+              {{ formatCoordinateValue(traverse.bounding_box?.min_easting) }}</span
             >
             <span
               ><strong>Max Easting:</strong>
-              {{ traverse.bounding_box?.max_easting }}</span
+              {{ formatCoordinateValue(traverse.bounding_box?.max_easting) }}</span
             >
           </div>
         </div>
@@ -110,7 +113,10 @@
 
 <script lang="ts" setup>
 import { ref, watch, computed, onMounted } from "vue";
+import { useCoordinatePrecision } from "~/composables/useCoordinatePrecision";
 const emit = defineEmits(["complete"]);
+
+const { coordinatePrecision, formatCoordinateValue } = useCoordinatePrecision();
 
 function emitComplete() {
   emit("complete", { legs: legs.value, traverse: traverse.value });

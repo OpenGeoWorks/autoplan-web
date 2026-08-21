@@ -238,29 +238,44 @@
           <table class="w-full text-sm">
             <thead class="bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
               <tr>
-                <th class="px-3 py-2 text-left">Point ID</th>
-                <th class="px-3 py-2 text-left">Northing (m)</th>
-                <th class="px-3 py-2 text-left">Easting (m)</th>
+                <th
+                  v-for="col in cornerColumns"
+                  :key="col.key"
+                  draggable="true"
+                  :title="`Drag to move the ${col.label} column`"
+                  class="px-3 py-2 text-left cursor-grab active:cursor-grabbing select-none"
+                  :class="[
+                    dragKey === col.key ? 'opacity-40' : '',
+                    overKey === col.key ? 'bg-blue-100 dark:bg-blue-900/40' : '',
+                  ]"
+                  @dragstart="onHeaderDragStart(col.key)"
+                  @dragover.prevent="onHeaderDragOver(col.key)"
+                  @drop.prevent="onHeaderDrop(col.key)"
+                  @dragend="onHeaderDragEnd"
+                >
+                  {{ col.label }}
+                </th>
                 <th class="px-3 py-2 w-10"></th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="(row, idx) in local.corners" :key="row._key" class="border-b border-gray-100 dark:border-slate-700/60">
-                <td class="px-3 py-1.5">
-                  <input v-model="row.point" type="text" placeholder="PB 101" class="w-28 cell-input" />
-                </td>
-                <td class="px-3 py-1.5">
-                  <input v-model.number="row.northing" type="number" step="0.001" class="w-40 cell-input" />
-                </td>
-                <td class="px-3 py-1.5">
-                  <input v-model.number="row.easting" type="number" step="0.001" class="w-40 cell-input" />
+                <td v-for="col in cornerColumns" :key="col.key" class="px-3 py-1.5">
+                  <input
+                    :value="(row as any)[col.key]"
+                    :type="col.type === 'text' ? 'text' : 'number'"
+                    :step="col.type === 'text' ? undefined : '0.001'"
+                    :placeholder="col.placeholder"
+                    :class="[col.type === 'text' ? 'w-28' : 'w-40', 'cell-input']"
+                    @input="setCornerCell(row, col, ($event.target as HTMLInputElement).value)"
+                  />
                 </td>
                 <td class="px-3 py-1.5">
                   <button @click="local.corners.splice(idx, 1)" class="text-red-500 hover:text-red-700 text-xs">✕</button>
                 </td>
               </tr>
               <tr v-if="!local.corners.length">
-                <td colspan="4" class="px-3 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                <td :colspan="cornerColumns.length + 1" class="px-3 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
                   No corner points yet.
                 </td>
               </tr>
@@ -439,6 +454,39 @@ import { reactive, ref, computed, watch } from "vue";
 import { useRoute } from "vue-router";
 import InfoTip from "~/components/InfoTip.vue";
 import { parseTable } from "~/composables/useSheetParser";
+import {
+  ID_FIELD,
+  NORTHING_FIELD,
+  EASTING_FIELD,
+  type FieldDef,
+} from "~/utils/columnMapping";
+import { useColumnOrder, applyStoredOrder } from "~/composables/useColumnOrder";
+
+// Only the corners table carries coordinates; plots and roads list ids and
+// dimensions, so neither has a northing/easting order to argue about.
+const CORNER_FIELDS: FieldDef[] = [
+  { ...ID_FIELD, key: "point", label: "Point ID", placeholder: "PB 101" },
+  { ...NORTHING_FIELD, label: "Northing (m)" },
+  { ...EASTING_FIELD, label: "Easting (m)" },
+];
+
+const cornerColumns = ref<FieldDef[]>(
+  applyStoredOrder("layout-corners", CORNER_FIELDS),
+);
+
+const {
+  dragKey,
+  overKey,
+  onHeaderDragStart,
+  onHeaderDragOver,
+  onHeaderDrop,
+  onHeaderDragEnd,
+} = useColumnOrder("layout-corners", cornerColumns);
+
+function setCornerCell(row: any, col: FieldDef, value: string) {
+  row[col.key] =
+    col.type === "text" ? value : value === "" ? null : Number(value);
+}
 
 export interface LayoutDesignParams {
   plot: { frontage: number; depth: number; min_area: number; remainder_strategy: string };
