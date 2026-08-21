@@ -69,18 +69,24 @@
         </svg>
         <div>
           <div class="text-xs font-medium text-gray-800 dark:text-gray-200">
-            Import coordinates (CSV or TXT or XLS/XLSX)
+            Import coordinates (CSV, TXT, XLS/XLSX or a CAD drawing)
           </div>
           <div class="text-[11px] text-gray-600 dark:text-gray-400">
-            Any column order — you'll map columns after upload
+            Any column order — you'll map columns after upload. DWG/DXF
+            drawings are read directly, so an old plan needs no spreadsheet.
           </div>
         </div>
       </div>
       <div class="flex items-center gap-2">
+        <span
+          v-if="uploadingFile"
+          class="text-xs text-gray-600 dark:text-gray-400"
+          >{{ uploadProgress }}</span
+        >
         <input
           ref="fileInputRef"
           type="file"
-          accept=".csv,.txt,.xls,.xlsx"
+          accept=".csv,.txt,.xls,.xlsx,.dwg,.dxf"
           @change="onFile"
           class="hidden"
         />
@@ -89,7 +95,7 @@
           @click="triggerFile"
           class="px-3 py-1.5 text-xs rounded bg-blue-600 text-white hover:bg-blue-700"
         >
-          Upload CSV/TXT
+          Upload file
         </button>
         <button
           type="button"
@@ -99,6 +105,21 @@
           Download Template
         </button>
       </div>
+    </div>
+
+    <!-- A large survey is stored whole and previewed here. Editing a preview
+         would discard everything it does not show, so the table says so. -->
+    <div
+      v-if="showingPreview"
+      class="rounded-md border border-blue-300 bg-blue-50 dark:border-blue-800/60 dark:bg-blue-900/20 px-3 py-2"
+    >
+      <p class="text-xs text-blue-900 dark:text-blue-200">
+        This survey holds
+        <strong>{{ storedPointCount.toLocaleString() }}</strong> points. The
+        table shows the first {{ local.coordinates.length }} — the full set is
+        stored and used for the drawing. To change the survey, upload a
+        replacement file.
+      </p>
     </div>
 
     <div ref="tableRef" class="overflow-x-auto">
@@ -207,6 +228,16 @@
     @confirmed="confirmClear"
   />
 
+  <!-- Legacy CAD import (shown after a DWG/DXF upload) -->
+  <CadImportModal
+    :open="showCadImport"
+    :inspection="cadInspection"
+    :busy="cadBusy"
+    @close="closeCadImport"
+    @reinspect="onCadReinspect"
+    @confirm="onCadConfirmed"
+  />
+
   <!-- Column mapping modal (shown after a file upload) -->
   <CoordinateColumnMapper
     v-model="showMapper"
@@ -217,12 +248,16 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, watch, ref, onMounted } from "vue";
+import { reactive, watch, ref, computed, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import { navigateTo } from "#imports";
 import { useCoordinateTransfer } from "~/composables/useCoordinateTransfer";
 import CoordinateColumnMapper from "~/components/CoordinateColumnMapper.vue";
+import CadImportModal from "~/components/CadImportModal.vue";
+import axios from "axios";
 import type { FieldDef, MappedCoordinate } from "~/utils/columnMapping";
+import type { CadInspection, CadStation } from "~/utils/cadImport";
+import { isCadFile } from "~/utils/cadImport";
 
 interface CoordRow {
   _key: string;
@@ -236,8 +271,10 @@ const props = withDefaults(
     modelValue: { coordinates: CoordRow[] };
     loading?: boolean;
     planType?: string;
+    /** Survey points held in the point store; the table shows a preview of them. */
+    pointCount?: number;
   }>(),
-  { loading: false, planType: "" }
+  { loading: false, planType: "", pointCount: 0 }
 );
 const emit = defineEmits(["update:modelValue", "complete"]);
 
@@ -250,6 +287,15 @@ const tableRef = ref<HTMLElement | null>(null);
 const showChooser = ref(true);
 const route = useRoute();
 const toast = useToast();
+
+const planId = computed(() => route.params.plan as string);
+
+// A large survey lives in the point store; the table holds a preview of it.
+const storedPointCount = ref(props.pointCount ?? 0);
+watch(() => props.pointCount, (value) => { storedPointCount.value = value ?? 0; });
+const showingPreview = computed(
+  () => storedPointCount.value > local.coordinates.length,
+);
 
 const {
   getTransferredCoordinates,
@@ -381,12 +427,173 @@ const MAPPER_FIELDS: FieldDef[] = [
   { key: "easting", label: "Easting", required: true },
 ];
 
+// --- Legacy CAD import (Task 11) -------------------------------------------
+// A DWG cannot be parsed in the browser, so it goes to the API, which forwards
+// it to the drawing engine. What comes back is every closed shape the drawing
+// holds, so the user picks their boundary instead of the app guessing.
+const showCadImport = ref(false);
+const cadBusy = ref(false);
+const cadInspection = ref<CadInspection | null>(null);
+const cadFile = ref<File | null>(null);
+
+async function inspectCadFile(file: File, units?: number) {
+  const form = new FormData();
+  form.append("file", file);
+  if (units !== undefined) form.append("units", String(units));
+
+  const { data } = await axios.post("/plan/cad/inspect", form);
+  return data?.data as CadInspection;
+}
+
+async function openCadImport(file: File) {
+  cadFile.value = file;
+  cadInspection.value = null;
+  showCadImport.value = true;
+  cadBusy.value = true;
+  try {
+    cadInspection.value = await inspectCadFile(file);
+    if (!cadInspection.value?.rings?.length) {
+      toast.add({
+        title: "No closed boundary found in that drawing",
+        description: "Check the layer the boundary is on, or that it is closed.",
+        color: "warning",
+      });
+    }
+  } catch (err: any) {
+    showCadImport.value = false;
+    toast.add({
+      title: "Could not read that drawing",
+      description: err?.response?.data?.message || err?.message,
+      color: "error",
+    });
+  } finally {
+    cadBusy.value = false;
+  }
+}
+
+// Re-reads the drawing when the user corrects its units; the file is still in
+// memory so this costs one request, not a re-upload by the user.
+async function onCadReinspect(units: number) {
+  if (!cadFile.value) return;
+  cadBusy.value = true;
+  try {
+    cadInspection.value = await inspectCadFile(cadFile.value, units);
+  } catch (err: any) {
+    toast.add({
+      title: "Could not re-read that drawing",
+      description: err?.response?.data?.message || err?.message,
+      color: "error",
+    });
+  } finally {
+    cadBusy.value = false;
+  }
+}
+
+function closeCadImport() {
+  showCadImport.value = false;
+  cadInspection.value = null;
+  cadFile.value = null;
+}
+
+function onCadConfirmed(stations: CadStation[]) {
+  local.coordinates = stations.map((station) => ({
+    _key: crypto.randomUUID(),
+    point: station.id,
+    northing: station.northing,
+    easting: station.easting,
+  }));
+  closeCadImport();
+  toast.add({
+    title: `Imported ${stations.length} coordinate${stations.length === 1 ? "" : "s"} from the drawing`,
+    color: "success",
+  });
+}
+
+// --- Large survey uploads (Task 12) ----------------------------------------
+// Anything past this many rows is sent to the server to be parsed and stored,
+// rather than parsed in the tab. A browser cannot hold a million rows, and the
+// plan document cannot hold them either — they live in the point store, and
+// this table shows a preview of them.
+const SERVER_PARSE_THRESHOLD = 2000;
+const uploadingFile = ref(false);
+const uploadProgress = ref("");
+
+/** Rough row count without materialising the file. */
+async function countRows(file: File): Promise<number> {
+  const sample = await file.slice(0, 256 * 1024).text();
+  const lines = sample.split(/\r?\n/).filter((line) => line.trim()).length;
+  if (file.size <= 256 * 1024) return lines;
+  return Math.round((lines / sample.length) * file.size);
+}
+
+async function uploadCoordinateFile(file: File, mapping?: unknown) {
+  uploadingFile.value = true;
+  uploadProgress.value = "Uploading and parsing…";
+  try {
+    const params = new URLSearchParams({ file_name: file.name });
+    if (mapping) params.set("mapping", JSON.stringify(mapping));
+
+    // The body is the file itself: the server streams it into its parser, so
+    // nothing here ever builds an array of rows.
+    const { data } = await axios.post(
+      `/plan/coordinates/upload/${planId.value}?${params.toString()}`,
+      file,
+      { headers: { "Content-Type": "application/octet-stream" } },
+    );
+
+    const plan = data?.data;
+    const stored = plan?.point_count ?? 0;
+    storedPointCount.value = stored;
+    local.coordinates = (plan?.coordinates ?? []).map((c: any) => ({
+      _key: crypto.randomUUID(),
+      point: c.id,
+      northing: c.northing,
+      easting: c.easting,
+    }));
+
+    const skipped = plan?.point_source?.skipped_rows ?? 0;
+    toast.add({
+      title: `Imported ${stored.toLocaleString()} coordinate${stored === 1 ? "" : "s"}`,
+      description:
+        (stored > local.coordinates.length
+          ? `Showing the first ${local.coordinates.length} in the table. `
+          : "") + (skipped ? `${skipped} row(s) could not be read and were skipped.` : ""),
+      color: "success",
+    });
+  } catch (err: any) {
+    toast.add({
+      title: "Could not import that file",
+      description: err?.response?.data?.message || err?.message,
+      color: "error",
+    });
+  } finally {
+    uploadingFile.value = false;
+    uploadProgress.value = "";
+  }
+}
+
 async function onFile(ev: Event) {
   const input = ev.target as HTMLInputElement;
   const file = input.files?.[0];
   if (!file) return;
 
   const ext = "." + (file.name.split(".").pop() || "").toLowerCase();
+
+  if (isCadFile(file.name)) {
+    if (fileInputRef.value) fileInputRef.value.value = "";
+    await openCadImport(file);
+    return;
+  }
+
+  // Excel cannot be streamed — it is a zip of XML that must be inflated whole
+  // — so it stays a client-side parse and keeps the mapping dialog. Delimited
+  // text goes to the server once it is big enough to matter.
+  const isDelimited = ext !== ".xls" && ext !== ".xlsx";
+  if (isDelimited && (await countRows(file)) > SERVER_PARSE_THRESHOLD) {
+    if (fileInputRef.value) fileInputRef.value.value = "";
+    await uploadCoordinateFile(file);
+    return;
+  }
 
   const openMapper = (rows: string[][]) => {
     if (fileInputRef.value) fileInputRef.value.value = "";

@@ -81,6 +81,7 @@
         <template v-if="planData.basic.type === 'topographic'">
           <!-- Step 1: Topo Boundary Table -->
           <StepCoordinates
+            :point-count="planData.pointCount"
             v-if="currentStep === 1"
             :model-value="boundaryModel"
             :plan-type="planData.basic.type"
@@ -116,6 +117,7 @@
           />
           <!-- Step 5: Embellishment -->
           <StepEmbellishment
+            :plan-type="planData.basic.type"
             v-else-if="currentStep === 5"
             :model-value="embellishmentModel"
             :loading="submittingEmbellishment"
@@ -179,6 +181,7 @@
           />
           <!-- Route Step 5: Embellishment -->
           <StepEmbellishment
+            :plan-type="planData.basic.type"
             v-else-if="currentStep === 5"
             :model-value="embellishmentModel"
             :loading="submittingEmbellishment"
@@ -203,6 +206,7 @@
         <template v-else-if="planData.basic.type === 'layout'">
           <!-- Layout Step 1: Site Boundary -->
           <StepCoordinates
+            :point-count="planData.pointCount"
             v-if="currentStep === 1"
             :model-value="boundaryModel"
             :loading="submittingCoordinates"
@@ -229,6 +233,7 @@
           />
           <!-- Layout Step 4: Embellishment -->
           <StepEmbellishment
+            :plan-type="planData.basic.type"
             v-else-if="currentStep === 4"
             :model-value="embellishmentModel"
             :loading="submittingEmbellishment"
@@ -253,6 +258,7 @@
         <template v-else>
           <!-- Step 1: Coordinates -->
           <StepCoordinates
+            :point-count="planData.pointCount"
             v-if="currentStep === 1"
             :model-value="coordinatesModel"
             :loading="submittingCoordinates"
@@ -292,6 +298,7 @@
           />
           <!-- Step 5: Embellishment -->
           <StepEmbellishment
+            :plan-type="planData.basic.type"
             v-else-if="currentStep === 5"
             :model-value="embellishmentModel"
             :loading="submittingEmbellishment"
@@ -443,8 +450,12 @@ const planData = reactive({
     dxf_version: "R2018",
     footers: [],
     footer_size: 1,
+    show_bearing_distance_table: false,
+    show_coordinate_table: false,
   },
   report: { generate: true },
+  // Survey points held in the point store; the coordinate table previews them.
+  pointCount: 0,
   // Topographic plan fields
   boundary: [] as any[],
   topoPoints: [] as any[],
@@ -635,6 +646,8 @@ const fetchPlan = async (skipNavigation = false) => {
         };
       }
 
+      planData.pointCount = data.point_count ?? 0;
+
       // Embellishment prefill: API returns these fields flattened in the plan object
       const emb: any = data;
       if (emb) {
@@ -665,6 +678,12 @@ const fetchPlan = async (skipNavigation = false) => {
             ? emb.footers
             : planData.embellishment.footers,
           footer_size: emb.footer_size ?? planData.embellishment.footer_size,
+          show_bearing_distance_table:
+            emb.show_bearing_distance_table ??
+            planData.embellishment.show_bearing_distance_table,
+          show_coordinate_table:
+            emb.show_coordinate_table ??
+            planData.embellishment.show_coordinate_table,
         };
       }
 
@@ -1034,6 +1053,8 @@ async function completeEmbellishment() {
       dxf_version: e.dxf_version ?? "R2018",
       footers: Array.isArray(e.footers) ? e.footers : [],
       footer_size: Number(e.footer_size ?? 1),
+      show_bearing_distance_table: !!e.show_bearing_distance_table,
+      show_coordinate_table: !!e.show_coordinate_table,
     };
     await axios.put(`/plan/edit/${planId}`, payload);
     // embellishment step index: topographic=5, route=5, layout=4, cadastral=5
@@ -1104,6 +1125,8 @@ type EmbellishmentUpdate = {
     dxf_version: string;
     footers: string[];
     footer_size: number;
+    show_bearing_distance_table?: boolean;
+    show_coordinate_table?: boolean;
   };
 };
 type ReportUpdate = {
@@ -1125,6 +1148,8 @@ type ReportUpdate = {
     dxf_version: string;
     footers: string[];
     footer_size: number;
+    show_bearing_distance_table?: boolean;
+    show_coordinate_table?: boolean;
   };
 };
 
