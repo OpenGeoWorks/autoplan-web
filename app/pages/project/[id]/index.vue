@@ -612,6 +612,14 @@ const computationOptions = [
     iconColor: "text-blue-600 dark:text-blue-400",
   },
   {
+    value: "back",
+    label: "Back Computation",
+    description: "Derive bearings and distances from known coordinates",
+    iconPath: "M11 17l-5-5m0 0l5-5m-5 5h12",
+    iconBg: "bg-amber-100 dark:bg-amber-900/30",
+    iconColor: "text-amber-600 dark:text-amber-400",
+  },
+  {
     value: "traverse",
     label: "Traverse Computation",
     description: "Close traverses with angular misclosure corrections",

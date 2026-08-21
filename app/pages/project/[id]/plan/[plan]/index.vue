@@ -24,6 +24,8 @@
                         ? 'forward-computation'
                         : computationType === 'traverse'
                         ? 'traverse-computation'
+                        : computationType === 'back'
+                        ? 'back-computation'
                         : 'differential-leveling'
                     }`
                   )
@@ -756,6 +758,9 @@ async function fetchPlanData() {
         } else if (data.traverse_computation_data) {
           computationType.value = "traverse";
           computationData.value = data.traverse_computation_data;
+        } else if (data.back_computation_data) {
+          computationType.value = "back";
+          computationData.value = data.back_computation_data;
         } else if (data.differential_leveling_data) {
           computationType.value = "differential-leveling";
           computationData.value = data.differential_leveling_data;
