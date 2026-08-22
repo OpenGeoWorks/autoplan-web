@@ -73,6 +73,26 @@ export async function previewColumns(file: File): Promise<ColumnPreview> {
   return data?.data as ColumnPreview;
 }
 
+/**
+ * Pull the right series out of a plan.
+ *
+ * A plan holds two: the survey at `coordinates`, and the perimeter at
+ * `topographic_boundary` or `layout_boundary`. Reading `coordinates` whatever
+ * was uploaded meant uploading an 8-point perimeter and being shown the 150
+ * spot heights that were already there.
+ */
+const seriesOf = (
+  plan: any,
+  kind: "coordinates" | "boundary" = "coordinates",
+): { preview: any[]; count: number } => {
+  if (kind === "boundary") {
+    const boundary = plan?.topographic_boundary ?? plan?.layout_boundary;
+    const preview = boundary?.coordinates ?? [];
+    return { preview, count: preview.length };
+  }
+  return { preview: plan?.coordinates ?? [], count: plan?.point_count ?? 0 };
+};
+
 export interface UploadOutcome {
   /** Preview rows for the table; never the whole survey. */
   preview: Array<{ id?: string; northing: number; easting: number }>;
@@ -159,10 +179,11 @@ export async function uploadCoordinateFile(
   );
 
   const plan = data?.data;
+  const series = seriesOf(plan, options.kind);
   return {
     // Only ever the preview. The survey stays in the point store.
-    preview: plan?.coordinates ?? [],
-    pointCount: plan?.point_count ?? 0,
+    preview: series.preview,
+    pointCount: series.count,
     skipped: plan?.point_source?.skipped_rows ?? 0,
     pointSource: plan?.point_source ?? null,
   };
@@ -187,9 +208,10 @@ export async function remapColumns(
     kind,
   });
   const plan = data?.data;
+  const series = seriesOf(plan, kind);
   return {
-    preview: plan?.coordinates ?? [],
-    pointCount: plan?.point_count ?? 0,
+    preview: series.preview,
+    pointCount: series.count,
     skipped: plan?.point_source?.skipped_rows ?? 0,
     pointSource: plan?.point_source ?? null,
   };

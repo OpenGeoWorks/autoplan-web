@@ -82,7 +82,7 @@
           <!-- Step 1: Topo Boundary Table -->
           <StepCoordinates
             kind="boundary"
-            :point-count="planData.pointCount"
+            :point-count="planData.boundary.length"
             v-if="currentStep === 1"
             :model-value="boundaryModel"
             :plan-type="planData.basic.type"
@@ -211,7 +211,7 @@
           <!-- Layout Step 1: Site Boundary -->
           <StepCoordinates
             kind="boundary"
-            :point-count="planData.pointCount"
+            :point-count="planData.boundary.length"
             v-if="currentStep === 1"
             :model-value="boundaryModel"
             :loading="submittingCoordinates"
