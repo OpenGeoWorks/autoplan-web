@@ -646,6 +646,9 @@ async function sendCoordinateFile(file: File, mapping?: unknown) {
 
     uploadedThisSession.value = true;
     storedPointCount.value = outcome.pointCount;
+    // Tell the page straight away, or Save & Continue will post this preview
+    // to the edit endpoint and be refused.
+    emit("update:pointSource", outcome.pointSource ?? null);
     // Only the preview reaches the table. The survey itself stays in the
     // point store; the browser never holds it.
     local.coordinates = outcome.preview.map((c: any) => ({

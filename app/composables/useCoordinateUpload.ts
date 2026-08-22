@@ -50,6 +50,15 @@ export interface UploadOutcome {
   preview: Array<{ id?: string; northing: number; easting: number }>;
   pointCount: number;
   skipped: number;
+  /**
+   * The plan's record of the file this came from.
+   *
+   * Handed back so the page can be told immediately. It otherwise only learns
+   * this when the plan is loaded, so a survey uploaded and saved in one
+   * sitting still looked like a typed table -- and Save & Continue posted the
+   * preview to the edit endpoint, which refused it.
+   */
+  pointSource: { file_name?: string; uploaded_at?: string } | null;
 }
 
 /** What the screen should be showing while an upload runs. */
@@ -124,6 +133,7 @@ export async function uploadCoordinateFile(
     preview: plan?.coordinates ?? [],
     pointCount: plan?.point_count ?? 0,
     skipped: plan?.point_source?.skipped_rows ?? 0,
+    pointSource: plan?.point_source ?? null,
   };
 }
 
@@ -149,6 +159,7 @@ export async function remapColumns(
     preview: plan?.coordinates ?? [],
     pointCount: plan?.point_count ?? 0,
     skipped: plan?.point_source?.skipped_rows ?? 0,
+    pointSource: plan?.point_source ?? null,
   };
 }
 

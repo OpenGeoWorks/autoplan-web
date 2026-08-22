@@ -490,9 +490,18 @@ async function onFile(ev: Event) {
 }
 
 /** Put a preview from the server into the table. */
-function showPreview(outcome: { preview: any[]; pointCount: number; skipped: number }) {
+function showPreview(outcome: {
+  preview: any[];
+  pointCount: number;
+  skipped: number;
+  pointSource?: any;
+}) {
   serverBacked.value = true;
   storedPointCount.value = outcome.pointCount;
+  // Tell the page straight away. It otherwise only learns this when the plan
+  // is loaded, so a survey uploaded and saved in one sitting still looked
+  // typed -- and Save & Continue posted the preview to the edit endpoint.
+  emit("update:pointSource", outcome.pointSource ?? null);
   local.coordinates = outcome.preview.map((c: any) => ({
     _key: crypto.randomUUID(),
     point: String(c.id ?? ""),
