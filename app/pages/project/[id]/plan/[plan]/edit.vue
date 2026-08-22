@@ -81,6 +81,7 @@
         <template v-if="planData.basic.type === 'topographic'">
           <!-- Step 1: Topo Boundary Table -->
           <StepCoordinates
+            kind="boundary"
             :point-count="planData.pointCount"
             v-if="currentStep === 1"
             :model-value="boundaryModel"
@@ -209,6 +210,7 @@
         <template v-else-if="planData.basic.type === 'layout'">
           <!-- Layout Step 1: Site Boundary -->
           <StepCoordinates
+            kind="boundary"
             :point-count="planData.pointCount"
             v-if="currentStep === 1"
             :model-value="boundaryModel"

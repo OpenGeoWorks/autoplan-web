@@ -19,6 +19,34 @@ import axios from "axios";
  * with a worker in between that could fail on its own.
  */
 
+/**
+ * Translate the mapping dialog's field keys into the server's.
+ *
+ * The dialog names its id field after the property it lands on in the table --
+ * "point", "station", "GCP_Name" depending on the step -- while the parser
+ * knows the four columns as id, northing, easting and elevation. Sent
+ * untranslated the id column was silently dropped and the server fell back to
+ * guessing it, so a user who corrected the id column watched their choice be
+ * ignored.
+ *
+ * Anything the parser does not recognise is left out rather than passed on,
+ * where it would be ignored just as quietly.
+ */
+const SERVER_FIELDS = ["id", "northing", "easting", "elevation"] as const;
+
+export const toServerMapping = (
+  mapping: Record<string, number | null> | undefined,
+  idKey = "point",
+): Record<string, number | null> | undefined => {
+  if (!mapping) return undefined;
+  const out: Record<string, number | null> = {};
+  for (const [key, value] of Object.entries(mapping)) {
+    const field = key === idKey ? "id" : key;
+    if ((SERVER_FIELDS as readonly string[]).includes(field)) out[field] = value ?? null;
+  }
+  return out;
+};
+
 /** How much of the file to send for a column preview. Enough to judge the
  *  columns by; nowhere near enough to be a way of uploading a survey. */
 const PREVIEW_BYTES = 64 * 1024;
@@ -87,11 +115,14 @@ export async function uploadCoordinateFile(
   options: {
     mapping?: unknown;
     kind?: "coordinates" | "boundary";
+    /** Which of the dialog's field keys is the point id. */
+    idKey?: string;
     onProgress?: (progress: UploadProgress) => void;
   } = {},
 ): Promise<UploadOutcome> {
   const params = new URLSearchParams({ file_name: file.name });
-  if (options.mapping) params.set("mapping", JSON.stringify(options.mapping));
+  const mapping = toServerMapping(options.mapping as Record<string, number | null>, options.idKey);
+  if (mapping) params.set("mapping", JSON.stringify(mapping));
   if (options.kind) params.set("kind", options.kind);
 
   const report = options.onProgress ?? (() => undefined);
@@ -149,9 +180,10 @@ export async function remapColumns(
   planId: string,
   mapping: Record<string, number | null>,
   kind?: "coordinates" | "boundary",
+  idKey = "point",
 ): Promise<UploadOutcome> {
   const { data } = await axios.post(`/plan/coordinates/remap/${planId}`, {
-    mapping,
+    mapping: toServerMapping(mapping, idKey),
     kind,
   });
   const plan = data?.data;

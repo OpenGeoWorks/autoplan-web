@@ -333,8 +333,24 @@ const props = withDefaults(
      * editable -- changing them means uploading a different file.
      */
     pointSource?: { file_name?: string; uploaded_at?: string } | null;
+    /**
+     * Which series this table holds.
+     *
+     * This step is the coordinate table on a cadastral plan and the boundary
+     * table on a topographic or layout one. Without knowing which, an upload
+     * here went into the survey series whatever the table was for -- so a
+     * boundary file was stored as the spot heights, and the plan drew a
+     * boundary and no contours.
+     */
+    kind?: "coordinates" | "boundary";
   }>(),
-  { loading: false, planType: "", pointCount: 0, pointSource: null }
+  {
+    loading: false,
+    planType: "",
+    pointCount: 0,
+    pointSource: null,
+    kind: "coordinates",
+  }
 );
 const emit = defineEmits(["update:modelValue", "complete", "update:pointSource"]);
 
@@ -636,6 +652,9 @@ async function sendCoordinateFile(file: File, mapping?: unknown) {
   try {
     const outcome = await uploadCoordinateFile(planId.value, file, {
       mapping,
+      kind: props.kind,
+      // The dialog names its id field after the table column it fills.
+      idKey: "point",
       onProgress: (p) => {
         // Sending is a real percentage; storing is not, so the bar goes
         // indeterminate rather than parking at 100 and looking stuck.
@@ -824,7 +843,7 @@ async function onRemoveUpload() {
 
   removingUpload.value = true;
   try {
-    await clearUploadedCoordinates(planId.value);
+    await clearUploadedCoordinates(planId.value, props.kind);
     uploadedThisSession.value = false;
     // The page holds the plan's point_source and decides from it whether to
     // save this table. Left stale it would keep the table locked and keep

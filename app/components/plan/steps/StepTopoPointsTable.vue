@@ -548,6 +548,9 @@ async function onMappingConfirmed(
       showPreview(
         await uploadCoordinateFile(planId.value, file, {
           mapping: columns.mapping,
+          kind: "coordinates",
+          // The dialog names its id field after the table column it fills.
+          idKey: "point",
           onProgress: (p) => {
             uploadPercent.value = p.phase === "sending" ? p.percent : 0;
             uploadLabel.value = p.label;
@@ -576,7 +579,7 @@ async function onMappingConfirmed(
     uploading.value = true;
     uploadLabel.value = "Re-reading the survey with the new columns…";
     try {
-      showPreview(await remapColumns(planId.value, columns.mapping));
+      showPreview(await remapColumns(planId.value, columns.mapping, "coordinates", "point"));
     } finally {
       uploading.value = false;
       uploadLabel.value = "";
