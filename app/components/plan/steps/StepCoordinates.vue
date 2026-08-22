@@ -114,11 +114,13 @@
       class="rounded-md border border-blue-300 bg-blue-50 dark:border-blue-800/60 dark:bg-blue-900/20 px-3 py-2"
     >
       <p class="text-xs text-blue-900 dark:text-blue-200">
-        This survey holds
-        <strong>{{ storedPointCount.toLocaleString() }}</strong> points. The
+        These coordinates came from
+        <strong>{{ uploadedFileName || "an uploaded file" }}</strong
+        >. The survey holds
+        <strong>{{ storedPointCount.toLocaleString() }}</strong> points and the
         table shows the first {{ local.coordinates.length }} — the full set is
-        stored and used for the drawing. To change the survey, upload a
-        replacement file.
+        stored and used for the drawing. To change them, upload a replacement
+        file.
       </p>
     </div>
 
@@ -169,11 +171,14 @@
                   col.type === 'text' ? 'w-16' : 'w-28',
                   'px-2 py-1 text-xs rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:outline-none',
                 ]"
+                :readonly="uploaded"
+                :disabled="uploaded"
                 @input="setCell(row, col, ($event.target as HTMLInputElement).value)"
               />
             </td>
             <td class="px-3 py-1 text-right">
               <button
+                v-if="!uploaded"
                 @click="removeRow(idx)"
                 class="text-red-600 hover:text-red-700 text-xs"
               >
@@ -194,6 +199,7 @@
     </div>
     <div class="flex gap-3">
       <button
+        v-if="!uploaded"
         @click="addRow"
         type="button"
         class="px-3 py-1.5 text-xs rounded bg-gray-200 hover:bg-gray-300 dark:bg-slate-600 dark:hover:bg-slate-500 text-gray-700 dark:text-gray-200"
@@ -201,6 +207,7 @@
         Add Row
       </button>
       <button
+        v-if="!uploaded"
         @click="clearAll"
         type="button"
         :disabled="!local.coordinates.length"
@@ -299,8 +306,14 @@ const props = withDefaults(
     planType?: string;
     /** Survey points held in the point store; the table shows a preview of them. */
     pointCount?: number;
+    /**
+     * Set when the coordinates came from a file. The file is then the record
+     * of the survey and this table is a preview of it, so the rows are not
+     * editable -- changing them means uploading a different file.
+     */
+    pointSource?: { file_name?: string; uploaded_at?: string } | null;
   }>(),
-  { loading: false, planType: "", pointCount: 0 }
+  { loading: false, planType: "", pointCount: 0, pointSource: null }
 );
 const emit = defineEmits(["update:modelValue", "complete"]);
 
@@ -318,9 +331,25 @@ const planId = computed(() => route.params.plan as string);
 
 // A large survey lives in the point store; the table holds a preview of it.
 const storedPointCount = ref(props.pointCount ?? 0);
+
+/**
+ * Whether these coordinates came from a file.
+ *
+ * True either because one was just uploaded, or because the plan was loaded
+ * and says so -- the table must be read-only on a revisit too, not only in
+ * the session that did the uploading.
+ */
+const uploaded = computed(
+  () => uploadedThisSession.value || Boolean(props.pointSource?.uploaded_at),
+);
+const uploadedFileName = computed(() => props.pointSource?.file_name ?? "");
+const uploadedThisSession = ref(false);
 watch(() => props.pointCount, (value) => { storedPointCount.value = value ?? 0; });
 const showingPreview = computed(
-  () => storedPointCount.value > local.coordinates.length,
+  // Shown for any uploaded survey, not only one too large for the table: the
+  // point is that the file is the record of it, which is true at 30 points as
+  // much as at a million.
+  () => uploaded.value || storedPointCount.value > local.coordinates.length,
 );
 
 const {
@@ -594,6 +623,7 @@ async function sendCoordinateFile(file: File, mapping?: unknown) {
       },
     });
 
+    uploadedThisSession.value = true;
     storedPointCount.value = outcome.pointCount;
     // Only the preview reaches the table. The survey itself stays in the
     // point store; the browser never holds it.

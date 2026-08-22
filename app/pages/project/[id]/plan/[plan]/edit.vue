@@ -93,6 +93,8 @@
           <StepTopoPoints
             v-else-if="currentStep === 2"
             :model-value="topoPointsModel"
+            :point-count="planData.pointCount"
+            :point-source="planData.pointSource"
             :loading="submittingCoordinates"
             @update:modelValue="(v) => (planData.topoPoints = v.coordinates)"
             @complete="onTopoPointsSaved"
@@ -259,6 +261,7 @@
           <!-- Step 1: Coordinates -->
           <StepCoordinates
             :point-count="planData.pointCount"
+            :point-source="planData.pointSource"
             v-if="currentStep === 1"
             :model-value="coordinatesModel"
             :loading="submittingCoordinates"
@@ -456,6 +459,7 @@ const planData = reactive({
   report: { generate: true },
   // Survey points held in the point store; the coordinate table previews them.
   pointCount: 0,
+  pointSource: null as any,
   // Topographic plan fields
   boundary: [] as any[],
   topoPoints: [] as any[],
@@ -647,6 +651,9 @@ const fetchPlan = async (skipNavigation = false) => {
       }
 
       planData.pointCount = data.point_count ?? 0;
+      // Tells the coordinate steps that the survey came from a file,
+      // so the table is a preview of it rather than the thing itself.
+      planData.pointSource = data.point_source ?? null;
 
       // Embellishment prefill: API returns these fields flattened in the plan object
       const emb: any = data;
@@ -863,6 +870,16 @@ async function completeCoordinates() {
   if (!planData.coordinates.length) return;
   try {
     submittingCoordinates.value = true;
+    // An uploaded survey is already stored, and this table only holds a
+    // preview of it. Saving that back would ask the server to replace the
+    // survey with its own first two hundred points, which it refuses -- so
+    // there is nothing to save here, only somewhere to go next.
+    if (planData.pointSource?.uploaded_at) {
+      markCompleted(1);
+      currentStep.value = 2;
+      return;
+    }
+
     const payload = {
       coordinates: planData.coordinates.map((r: any) => ({
         id: r.point,

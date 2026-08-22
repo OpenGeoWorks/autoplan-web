@@ -128,11 +128,14 @@
                   col.type === 'text' ? 'w-16' : 'w-28',
                   'px-2 py-1 text-xs rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:outline-none',
                 ]"
+                :readonly="uploaded"
+                :disabled="uploaded"
                 @input="setCell(row, col, ($event.target as HTMLInputElement).value)"
               />
             </td>
             <td class="px-3 py-1 text-right">
               <button
+                v-if="!uploaded"
                 @click="removeRow(idx)"
                 class="text-red-600 hover:text-red-700 text-xs"
               >
@@ -152,13 +155,20 @@
       </table>
     </div>
     <div class="mt-2 text-[11px] text-gray-600 dark:text-gray-300">
-      <template v-if="totalCount > displayCount">
+      <template v-if="uploaded">
+        Showing the first
+        <strong>{{ local.coordinates.length.toLocaleString() }}</strong> of
+        <strong>{{ storedPointCount.toLocaleString() }}</strong> points from
+        <strong>{{ uploadedFileName || "your file" }}</strong
+        >. Upload another file to change them.
+      </template>
+      <template v-else-if="totalCount > displayCount">
         Showing first {{ displayCount }} of {{ totalCount }} rows
       </template>
       <template v-else> Showing {{ totalCount }} rows </template>
     </div>
 
-    <div class="flex gap-3">
+    <div v-if="!uploaded" class="flex gap-3">
       <button
         @click="addRow"
         type="button"
@@ -175,12 +185,12 @@
         Clear All
       </button>
     </div>
-    <p class="text-[11px] text-gray-500 dark:text-gray-400">
+    <p v-if="!uploaded" class="text-[11px] text-gray-500 dark:text-gray-400">
       Add at least one topo point to proceed.
     </p>
     <div class="mt-3">
       <button
-        v-if="totalCount > displayCount"
+        v-if="!uploaded && totalCount > displayCount"
         @click="loadMore"
         type="button"
         class="px-3 py-1.5 text-xs rounded bg-blue-600 text-white hover:bg-blue-700"
@@ -209,7 +219,17 @@
 <script setup lang="ts">
 import { reactive, watch, ref, nextTick, computed } from "vue";
 import { useRoute } from "vue-router";
-const props = defineProps<{ modelValue: { coordinates: any[] } }>();
+const props = defineProps<{
+  modelValue: { coordinates: any[] };
+  /** Survey points held in the point store; the table shows a preview. */
+  pointCount?: number;
+  /**
+   * Set when the coordinates came from a file. The file is then the record of
+   * the survey and this table is a preview of it, so the rows are not
+   * editable -- changing them means uploading a different file.
+   */
+  pointSource?: { file_name?: string; uploaded_at?: string } | null;
+}>();
 const emit = defineEmits(["update:modelValue"]);
 const local = reactive<{ coordinates: any[] }>({ coordinates: [] });
 // Flag to avoid echoing updates back to parent when applying incoming prop changes
@@ -222,7 +242,13 @@ const planId = computed(() => route.params.plan as string);
 const toast = useToast();
 
 // A large survey lives in the point store; the table holds a preview of it.
-const storedPointCount = ref(0);
+const storedPointCount = ref(props.pointCount ?? 0);
+watch(
+  () => props.pointCount,
+  (value) => {
+    if (!serverBacked.value) storedPointCount.value = value ?? 0;
+  },
+);
 const uploading = ref(false);
 const uploadPercent = ref(0);
 const uploadLabel = ref("");
@@ -232,6 +258,18 @@ const pendingFile = ref<File | null>(null);
 /** True when the survey lives in the point store rather than in this table,
  *  which is what decides whether a column change is re-read on the server. */
 const serverBacked = ref(false);
+
+/**
+ * Whether these coordinates came from a file.
+ *
+ * True either because one was just uploaded, or because the plan was loaded
+ * and says so -- the table has to be read-only on a revisit too, not only in
+ * the session that did the uploading.
+ */
+const uploaded = computed(
+  () => serverBacked.value || Boolean(props.pointSource?.uploaded_at),
+);
+const uploadedFileName = computed(() => props.pointSource?.file_name ?? "");
 const showMapper = ref(false);
 const rawRows = ref<string[][]>([]);
 const MAX_DISPLAY = 100;
