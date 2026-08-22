@@ -190,6 +190,12 @@
     </div>
 
     <!-- Column mapping modal (shown after a file upload) -->
+    <UploadProgressOverlay
+      :show="uploading"
+      :label="uploadLabel"
+      :percent="uploadPercent"
+    />
+
     <CoordinateColumnMapper
       v-model="showMapper"
       :rows="rawRows"
@@ -324,6 +330,7 @@ import {
   remapColumns,
 } from "~/composables/useCoordinateUpload";
 import CoordinateColumnMapper from "~/components/CoordinateColumnMapper.vue";
+import UploadProgressOverlay from "~/components/UploadProgressOverlay.vue";
 import {
   ID_FIELD,
   NORTHING_FIELD,

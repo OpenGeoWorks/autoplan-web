@@ -245,68 +245,11 @@
     @confirm="onCadConfirmed"
   />
 
-  <!--
-    Upload progress.
-
-    A large survey is parsed by a worker, not inside the request, so this can
-    run for a minute or more. Without something on screen that reads as
-    working, a wait that long is indistinguishable from a frozen tab — which
-    is exactly what it looked like before.
-  -->
-  <div
-    v-if="uploadingFile"
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-  >
-    <div
-      class="w-[min(26rem,90vw)] rounded-lg bg-white dark:bg-slate-800 p-6 shadow-xl"
-    >
-      <div class="flex items-center gap-3">
-        <svg
-          class="h-5 w-5 animate-spin text-blue-600"
-          viewBox="0 0 24 24"
-          fill="none"
-        >
-          <circle
-            class="opacity-25"
-            cx="12"
-            cy="12"
-            r="10"
-            stroke="currentColor"
-            stroke-width="4"
-          />
-          <path
-            class="opacity-75"
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-          />
-        </svg>
-        <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
-          Importing your survey
-        </p>
-      </div>
-
-      <p class="mt-3 text-xs text-gray-600 dark:text-gray-400">
-        {{ uploadProgress || "Working…" }}
-      </p>
-
-      <!-- Indeterminate until the worker reports a percentage: a bar sitting
-           at 0% reads as stuck, which is the thing this is here to avoid. -->
-      <div
-        class="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-slate-700"
-      >
-        <div
-          class="h-full rounded-full bg-blue-600 transition-all duration-500"
-          :class="uploadPercent > 0 ? '' : 'w-1/3 animate-pulse'"
-          :style="uploadPercent > 0 ? { width: uploadPercent + '%' } : undefined"
-        />
-      </div>
-
-      <p class="mt-3 text-[11px] text-gray-500 dark:text-gray-400">
-        A large survey takes a minute or so to read. Please keep this tab open
-        until it finishes.
-      </p>
-    </div>
-  </div>
+  <UploadProgressOverlay
+    :show="uploadingFile"
+    :label="uploadProgress"
+    :percent="uploadPercent"
+  />
 
   <!-- Column mapping modal (shown after a file upload) -->
   <CoordinateColumnMapper
@@ -324,6 +267,7 @@ import { useRoute } from "vue-router";
 import { navigateTo } from "#imports";
 import { useCoordinateTransfer } from "~/composables/useCoordinateTransfer";
 import CoordinateColumnMapper from "~/components/CoordinateColumnMapper.vue";
+import UploadProgressOverlay from "~/components/UploadProgressOverlay.vue";
 import {
   previewColumns,
   uploadCoordinateFile,
