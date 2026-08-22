@@ -1,5 +1,4 @@
 import axios from "axios";
-import { followJob, type GenerationProgress } from "~/composables/usePlanGeneration";
 
 /**
  * Uploading a coordinate file (Task 12).
@@ -14,8 +13,10 @@ import { followJob, type GenerationProgress } from "~/composables/usePlanGenerat
  *     works from a sample of rows the server returns, and the column indices
  *     it produces are applied to the whole file server-side.
  *
- * A large file is queued rather than parsed inside the request, so this
- * follows the job and reports progress the same way generation does.
+ * The upload itself is one request. Queueing it behind a worker was built and
+ * measured: it returned in a second, but the table cannot be drawn until the
+ * survey is stored, so the user waited just as long -- through a polling loop,
+ * with a worker in between that could fail on its own.
  */
 
 /** How much of the file to send for a column preview. Enough to judge the
@@ -51,11 +52,25 @@ export interface UploadOutcome {
   skipped: number;
 }
 
+/** What the screen should be showing while an upload runs. */
+export interface UploadProgress {
+  /** "sending" while bytes leave the browser, "storing" while the server works. */
+  phase: "sending" | "storing";
+  /** 0-100 while sending; meaningless once the server has the file. */
+  percent: number;
+  label: string;
+}
+
 /**
- * Send a file to be parsed and stored, following the job if one is returned.
+ * Send a file to be parsed and stored, reporting progress throughout.
  *
- * `onProgress` is called while a queued upload runs, so the screen can show
- * something moving instead of appearing to hang for a minute.
+ * The upload is a single request: the server parses and stores the survey
+ * before it answers. That is a real wait on a large file -- roughly a minute
+ * for a million and a half points -- which is why `onProgress` exists. The
+ * browser knows exactly how many bytes it has sent, so that half is a real
+ * percentage; once the file is delivered the server is working and there is
+ * nothing to count, so the screen says so rather than showing a bar that has
+ * stopped moving.
  */
 export async function uploadCoordinateFile(
   planId: string,
@@ -63,51 +78,76 @@ export async function uploadCoordinateFile(
   options: {
     mapping?: unknown;
     kind?: "coordinates" | "boundary";
-    onProgress?: (progress: GenerationProgress) => void;
+    onProgress?: (progress: UploadProgress) => void;
   } = {},
 ): Promise<UploadOutcome> {
   const params = new URLSearchParams({ file_name: file.name });
   if (options.mapping) params.set("mapping", JSON.stringify(options.mapping));
   if (options.kind) params.set("kind", options.kind);
 
-  options.onProgress?.({
-    background: true,
-    percent: 0,
-    stage: "uploading the file",
-    processed: 0,
-    total: 0,
-  });
+  const report = options.onProgress ?? (() => undefined);
+  report({ phase: "sending", percent: 0, label: "Uploading the file…" });
 
-  const response = await axios.post(
+  const { data } = await axios.post(
     `/plan/coordinates/upload/${planId}?${params.toString()}`,
-    // The body is the file itself. The browser streams it; nothing here ever
-    // builds an array of rows.
+    // The body is the file itself. The browser streams it from disk; nothing
+    // here ever reads it into memory or builds an array of rows.
     file,
     {
       headers: { "Content-Type": "application/octet-stream" },
-      // 202 means queued, which axios must not treat as a failure.
-      validateStatus: (status) => status === 200 || status === 202,
+      // A large survey takes the server a while to store, and the default
+      // would abandon a request that is working perfectly well.
+      timeout: 0,
+      onUploadProgress: (event) => {
+        const total = event.total ?? file.size;
+        const percent = total ? Math.min(100, Math.round((event.loaded / total) * 100)) : 0;
+        report(
+          percent >= 100
+            ? {
+                phase: "storing",
+                percent: 100,
+                label: "Reading and storing the survey…",
+              }
+            : {
+                phase: "sending",
+                percent,
+                label: `Uploading the file… ${percent}%`,
+              },
+        );
+      },
     },
   );
 
-  const data = response.data?.data;
-
-  // Queued: the survey is parsed by a worker and we follow the job.
-  if (data?.job?.id) {
-    await followJob(data.job.id, options.onProgress);
-    const { data: refreshed } = await axios.get(`/plan/fetch/${planId}`);
-    const plan = refreshed?.data;
-    return {
-      preview: plan?.coordinates ?? [],
-      pointCount: plan?.point_count ?? 0,
-      skipped: plan?.point_source?.skipped_rows ?? 0,
-    };
-  }
-
-  // Small enough to have been parsed in the request.
+  const plan = data?.data;
   return {
-    preview: data?.coordinates ?? [],
-    pointCount: data?.point_count ?? 0,
-    skipped: data?.point_source?.skipped_rows ?? 0,
+    // Only ever the preview. The survey stays in the point store.
+    preview: plan?.coordinates ?? [],
+    pointCount: plan?.point_count ?? 0,
+    skipped: plan?.point_source?.skipped_rows ?? 0,
+  };
+}
+
+/**
+ * Apply a different column arrangement to a survey already uploaded.
+ *
+ * Only the column indices go up. The server re-reads the file it still has
+ * and replaces the point store, so a survey of any size can be
+ * re-interpreted without a single coordinate crossing the wire in either
+ * direction — which is what made the browser fall over.
+ */
+export async function remapColumns(
+  planId: string,
+  mapping: Record<string, number | null>,
+  kind?: "coordinates" | "boundary",
+): Promise<UploadOutcome> {
+  const { data } = await axios.post(`/plan/coordinates/remap/${planId}`, {
+    mapping,
+    kind,
+  });
+  const plan = data?.data;
+  return {
+    preview: plan?.coordinates ?? [],
+    pointCount: plan?.point_count ?? 0,
+    skipped: plan?.point_source?.skipped_rows ?? 0,
   };
 }

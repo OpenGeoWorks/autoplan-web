@@ -302,8 +302,8 @@
       </div>
 
       <p class="mt-3 text-[11px] text-gray-500 dark:text-gray-400">
-        A large survey is read in the background. You can leave this open —
-        it will finish on its own.
+        A large survey takes a minute or so to read. Please keep this tab open
+        until it finishes.
       </p>
     </div>
   </div>
@@ -328,7 +328,6 @@ import {
   previewColumns,
   uploadCoordinateFile,
 } from "~/composables/useCoordinateUpload";
-import { describeProgress } from "~/composables/usePlanGeneration";
 import CadImportModal from "~/components/CadImportModal.vue";
 import axios from "axios";
 import {
@@ -644,8 +643,10 @@ async function sendCoordinateFile(file: File, mapping?: unknown) {
     const outcome = await uploadCoordinateFile(planId.value, file, {
       mapping,
       onProgress: (p) => {
-        uploadPercent.value = p.percent;
-        uploadProgress.value = describeProgress(p);
+        // Sending is a real percentage; storing is not, so the bar goes
+        // indeterminate rather than parking at 100 and looking stuck.
+        uploadPercent.value = p.phase === "sending" ? p.percent : 0;
+        uploadProgress.value = p.label;
       },
     });
 
