@@ -197,6 +197,26 @@
         </tbody>
       </table>
     </div>
+    <!--
+      Removing an uploaded survey is the only way back to a table the user can
+      type in, since uploaded coordinates are not editable row by row. It is
+      destructive and confirmed, because the points it discards are not in the
+      browser to be undone.
+    -->
+    <div v-if="uploaded" class="flex gap-3">
+      <button
+        type="button"
+        :disabled="removingUpload"
+        @click="onRemoveUpload"
+        class="px-3 py-1.5 text-xs rounded border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed dark:border-red-700 dark:text-red-300 dark:hover:bg-red-900/30"
+      >
+        {{ removingUpload ? "Removing…" : "Remove uploaded coordinates" }}
+      </button>
+      <p class="self-center text-[11px] text-gray-500 dark:text-gray-400">
+        Discards the survey and lets you enter coordinates by hand.
+      </p>
+    </div>
+
     <div class="flex gap-3">
       <button
         v-if="!uploaded"
@@ -278,6 +298,7 @@ import UploadProgressOverlay from "~/components/UploadProgressOverlay.vue";
 import {
   previewColumns,
   uploadCoordinateFile,
+  clearUploadedCoordinates,
 } from "~/composables/useCoordinateUpload";
 import CadImportModal from "~/components/CadImportModal.vue";
 import axios from "axios";
@@ -315,7 +336,7 @@ const props = withDefaults(
   }>(),
   { loading: false, planType: "", pointCount: 0, pointSource: null }
 );
-const emit = defineEmits(["update:modelValue", "complete"]);
+const emit = defineEmits(["update:modelValue", "complete", "update:pointSource"]);
 
 const local = reactive<{ coordinates: CoordRow[] }>({ coordinates: [] });
 const fileInputRef = ref<HTMLInputElement | null>(null);
@@ -777,4 +798,48 @@ function downloadTemplate() {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+const removingUpload = ref(false);
+
+/**
+ * Discard the uploaded survey and go back to an empty, typeable table.
+ *
+ * Confirmed first: the points are in the point store, not here, so there is
+ * nothing to undo it with.
+ */
+async function onRemoveUpload() {
+  const total = storedPointCount.value.toLocaleString();
+  if (
+    !window.confirm(
+      `Remove the ${total} uploaded coordinates from this plan?\n\n` +
+        "The survey will be discarded and you can enter coordinates by hand. " +
+        "This cannot be undone.",
+    )
+  ) {
+    return;
+  }
+
+  removingUpload.value = true;
+  try {
+    await clearUploadedCoordinates(planId.value);
+    uploadedThisSession.value = false;
+    // The page holds the plan's point_source and decides from it whether to
+    // save this table. Left stale it would keep the table locked and keep
+    // skipping the save, so the parent is told rather than left to find out.
+    emit("update:pointSource", null);
+    storedPointCount.value = 0;
+    local.coordinates = [];
+    emit("update:modelValue", { coordinates: [] });
+    toast.add({ title: "Uploaded coordinates removed", color: "success" });
+  } catch (err: any) {
+    toast.add({
+      title: "Could not remove the uploaded coordinates",
+      description: err?.response?.data?.message || err?.message,
+      color: "error",
+    });
+  } finally {
+    removingUpload.value = false;
+  }
+}
+
 </script>

@@ -151,3 +151,18 @@ export async function remapColumns(
     skipped: plan?.point_source?.skipped_rows ?? 0,
   };
 }
+
+/**
+ * Discard an uploaded survey, returning the plan to a table.
+ *
+ * Uploaded coordinates cannot be edited row by row, so without this an upload
+ * is a one-way door: a file chosen by mistake could only be replaced by
+ * another file, never simply removed.
+ */
+export async function clearUploadedCoordinates(
+  planId: string,
+  kind?: "coordinates" | "boundary",
+): Promise<void> {
+  const params = kind ? `?kind=${kind}` : "";
+  await axios.delete(`/plan/coordinates/uploaded/${planId}${params}`);
+}

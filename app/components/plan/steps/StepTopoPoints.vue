@@ -14,6 +14,7 @@
     :point-count="pointCount"
     :point-source="pointSource"
     @update:modelValue="onUpdate"
+    @update:pointSource="(v: any) => emit('update:pointSource', v)"
   />
   <div class="flex justify-end mt-6">
     <button
@@ -53,7 +54,7 @@ const props = defineProps({
     default: null,
   },
 });
-const emit = defineEmits(["update:modelValue", "complete"]);
+const emit = defineEmits(["update:modelValue", "complete", "update:pointSource"]);
 const route = useRoute();
 const planId = route.params.plan as string;
 const submitting = ref(false);

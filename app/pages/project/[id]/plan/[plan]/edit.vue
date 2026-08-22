@@ -95,6 +95,7 @@
             :model-value="topoPointsModel"
             :point-count="planData.pointCount"
             :point-source="planData.pointSource"
+            @update:pointSource="(v: any) => (planData.pointSource = v)"
             :loading="submittingCoordinates"
             @update:modelValue="(v) => (planData.topoPoints = v.coordinates)"
             @complete="onTopoPointsSaved"
@@ -262,6 +263,7 @@
           <StepCoordinates
             :point-count="planData.pointCount"
             :point-source="planData.pointSource"
+            @update:pointSource="(v: any) => (planData.pointSource = v)"
             v-if="currentStep === 1"
             :model-value="coordinatesModel"
             :loading="submittingCoordinates"
