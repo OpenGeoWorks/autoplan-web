@@ -190,7 +190,7 @@
           <label
             class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
             >Title Size
-            <InfoTip text="Printed height of the plan title, in millimetres on the sheet. Moves the title block only — the area, origin and scale bar follow it, and the rest of the plan is unaffected. Default 5 mm." /></label
+            <InfoTip text="Printed height of the plan title, in millimetres on the sheet. Moves the title block only — the area, origin and scale bar follow it, and the rest of the plan is unaffected. The whole block is one size. Default 3.5 mm." /></label
           >
           <input
             v-model.number="local.embellishment.font_size"
@@ -546,7 +546,7 @@ const emit = defineEmits(["update:modelValue", "complete", "refresh"]);
  * the plan will actually be drawn at.
  */
 const DEFAULT_SIZES = {
-  font_size: 5,
+  font_size: 3.5,
   label_size: 2.5,
   footer_size: 2.5,
   beacon_size: 1.6,
