@@ -132,6 +132,7 @@
           <!-- Step 6: Report -->
           <StepReport
             v-else-if="currentStep === 6"
+            :generated="planData.generated"
             :model-value="reportModel"
             :basic="planData.basic"
             :coordinates-count="(planData.topoPoints || []).length"
@@ -196,6 +197,7 @@
           <!-- Route Step 6: Report -->
           <StepReport
             v-else-if="currentStep === 6"
+            :generated="planData.generated"
             :model-value="reportModel"
             :basic="planData.basic"
             :coordinates-count="planData.elevations.length"
@@ -249,6 +251,7 @@
           <!-- Layout Step 5: Report -->
           <StepReport
             v-else-if="currentStep === 5"
+            :generated="planData.generated"
             :model-value="reportModel"
             :basic="planData.basic"
             :coordinates-count="planData.boundary.length"
@@ -316,6 +319,7 @@
           <!-- Step 6: Report -->
           <StepReport
             v-else-if="currentStep === 6"
+            :generated="planData.generated"
             :model-value="reportModel"
             :basic="planData.basic"
             :coordinates-count="planData.coordinates.length"
@@ -464,6 +468,7 @@ const planData = reactive({
   // Survey points held in the point store; the coordinate table previews them.
   pointCount: 0,
   pointSource: null as any,
+  generated: null as any,
   // Topographic plan fields
   boundary: [] as any[],
   topoPoints: [] as any[],
@@ -658,6 +663,9 @@ const fetchPlan = async (skipNavigation = false) => {
       // Tells the coordinate steps that the survey came from a file,
       // so the table is a preview of it rather than the thing itself.
       planData.pointSource = data.point_source ?? null;
+      // The last plan drawn for this record, so the report step can
+      // offer the file instead of only the button that redraws it.
+      planData.generated = data.generated ?? null;
 
       // Embellishment prefill: API returns these fields flattened in the plan object
       const emb: any = data;

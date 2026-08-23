@@ -340,6 +340,34 @@
           Generate a complete survey plan with all the data you've entered.
         </p>
 
+        <!--
+          A plan drawn earlier. Shown before anything is generated in this
+          session, so returning to a finished plan offers the file rather than
+          only the button that would redraw it.
+        -->
+        <div
+          v-if="!generationState.url && props.generated?.url"
+          class="mb-4 rounded-md border border-gray-200 dark:border-slate-700 p-3"
+        >
+          <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">
+            A plan was generated for this record{{ generatedWhen }}.
+          </p>
+          <a
+            :href="props.generated.url"
+            download
+            class="inline-flex items-center gap-2 px-3 py-1.5 text-xs rounded-md bg-gray-800 text-white hover:bg-gray-900 dark:bg-slate-600 dark:hover:bg-slate-500"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            Download the last plan
+          </a>
+          <p class="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
+            Generating again redraws it from the current data.
+          </p>
+        </div>
+
         <div v-if="generationState.url" class="mb-4">
           <div
             class="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm"
@@ -353,6 +381,19 @@
             </svg>
             Plan generated and downloaded successfully!
           </div>
+          <!-- The browser may have blocked the automatic download, and the
+               file is worth a second chance without redrawing it. -->
+          <a
+            :href="generationState.url"
+            download
+            class="mt-2 inline-flex items-center gap-2 px-3 py-1.5 text-xs rounded-md bg-gray-800 text-white hover:bg-gray-900 dark:bg-slate-600 dark:hover:bg-slate-500"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            Download again
+          </a>
         </div>
 
         <div v-else>
@@ -445,7 +486,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, watch } from "vue";
+import { computed, reactive, watch } from "vue";
 import { useRoute } from "vue-router";
 import axios from "axios";
 import {
@@ -479,6 +520,13 @@ const props = defineProps<{
   longitudinalParams?: Record<string, any> | null;
   // Layout-specific (optional)
   layoutParams?: Record<string, any> | null;
+  /**
+   * The last plan drawn for this record, if there is one.
+   *
+   * Generation takes minutes on a large survey, so a plan already drawn is
+   * worth offering rather than making someone draw it again to get the file.
+   */
+  generated?: { url?: string; generated_at?: string; scale?: number } | null;
 }>();
 const emit = defineEmits(["cancel", "finish"]);
 
@@ -492,6 +540,18 @@ const local = reactive({
 });
 
 // Plan generation state
+/** "on 23 Aug 2026", or nothing if the plan does not say when. */
+const generatedWhen = computed(() => {
+  const at = props.generated?.generated_at;
+  if (!at) return "";
+  const when = new Date(at);
+  return Number.isNaN(when.getTime())
+    ? ""
+    : ` on ${when.toLocaleDateString(undefined, {
+        day: "numeric", month: "short", year: "numeric",
+      })}`;
+});
+
 const generationState = reactive({
   loading: false,
   url: null as string | null,
