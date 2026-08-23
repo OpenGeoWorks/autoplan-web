@@ -113,6 +113,7 @@
           <StepDrawing
             v-else-if="currentStep === 4"
             :coordinates="planData.topoPoints"
+            :point-count="planData.pointCount"
             :boundary="planData.boundary"
             :show-boundary="planData.topoSettings.show_boundary !== false"
             :show-spot-heights="planData.topoSettings.show_spot_heights !== false"
@@ -170,6 +171,7 @@
           <StepDrawing
             v-else-if="currentStep === 3"
             :coordinates="planData.coordinates"
+            :point-count="planData.pointCount"
             :parcel-name="planData.basic.name || 'Route'"
             plan-type="route"
             :right-of-way-width="planData.routeParams.right_of_way_width"
@@ -299,6 +301,7 @@
             v-else-if="currentStep === 4"
             :model-value="drawingModel"
             :coordinates="planData.coordinates"
+            :point-count="planData.pointCount"
             :parcel-name="planData.parcels[0]?.name || planData.basic.name"
             :parcels="planData.parcels"
             :plan-type="planData.basic.type"
