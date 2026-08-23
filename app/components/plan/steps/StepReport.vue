@@ -346,23 +346,24 @@
           only the button that would redraw it.
         -->
         <div
-          v-if="!generationState.url && props.generated?.url"
+          v-if="!generationState.url && props.generated?.key"
           class="mb-4 rounded-md border border-gray-200 dark:border-slate-700 p-3"
         >
           <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">
             A plan was generated for this record{{ generatedWhen }}.
           </p>
-          <a
-            :href="props.generated.url"
-            download
-            class="inline-flex items-center gap-2 px-3 py-1.5 text-xs rounded-md bg-gray-800 text-white hover:bg-gray-900 dark:bg-slate-600 dark:hover:bg-slate-500"
+          <button
+            type="button"
+            :disabled="downloadingPlan"
+            @click="downloadGeneratedPlan"
+            class="inline-flex items-center gap-2 px-3 py-1.5 text-xs rounded-md bg-gray-800 text-white hover:bg-gray-900 disabled:opacity-50 dark:bg-slate-600 dark:hover:bg-slate-500"
           >
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
             </svg>
-            Download the last plan
-          </a>
+            {{ downloadingPlan ? "Preparing…" : "Download the last plan" }}
+          </button>
           <p class="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
             Generating again redraws it from the current data.
           </p>
@@ -383,17 +384,18 @@
           </div>
           <!-- The browser may have blocked the automatic download, and the
                file is worth a second chance without redrawing it. -->
-          <a
-            :href="generationState.url"
-            download
-            class="mt-2 inline-flex items-center gap-2 px-3 py-1.5 text-xs rounded-md bg-gray-800 text-white hover:bg-gray-900 dark:bg-slate-600 dark:hover:bg-slate-500"
+          <button
+            type="button"
+            :disabled="downloadingPlan"
+            @click="downloadGeneratedPlan"
+            class="mt-2 inline-flex items-center gap-2 px-3 py-1.5 text-xs rounded-md bg-gray-800 text-white hover:bg-gray-900 disabled:opacity-50 dark:bg-slate-600 dark:hover:bg-slate-500"
           >
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
             </svg>
-            Download again
-          </a>
+            {{ downloadingPlan ? "Preparing…" : "Download again" }}
+          </button>
         </div>
 
         <div v-else>
@@ -486,11 +488,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import axios from "axios";
 import {
   generatePlan as runGeneration,
+  getPlanDownloadUrl,
   emptyProgress,
   describeProgress,
 } from "~/composables/usePlanGeneration";
@@ -526,7 +529,7 @@ const props = defineProps<{
    * Generation takes minutes on a large survey, so a plan already drawn is
    * worth offering rather than making someone draw it again to get the file.
    */
-  generated?: { url?: string; generated_at?: string; scale?: number } | null;
+  generated?: { key?: string; generated_at?: string; scale?: number } | null;
 }>();
 const emit = defineEmits(["cancel", "finish"]);
 
@@ -551,6 +554,38 @@ const generatedWhen = computed(() => {
         day: "numeric", month: "short", year: "numeric",
       })}`;
 });
+
+const downloadingPlan = ref(false);
+
+/**
+ * Fetch a fresh link and save the file.
+ *
+ * The link is signed and short-lived, so it is asked for at the moment of the
+ * click rather than held in the page -- one kept around would either have
+ * expired or, worse, still be live.
+ */
+async function downloadGeneratedPlan() {
+  if (downloadingPlan.value) return;
+  downloadingPlan.value = true;
+  try {
+    const url = await getPlanDownloadUrl(planId);
+    const link = document.createElement("a");
+    link.href = url;
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch (error: any) {
+    toast?.add?.({
+      title: "Could not download the plan",
+      description:
+        error?.response?.data?.message || error?.message || "Please try again.",
+      color: "error",
+    });
+  } finally {
+    downloadingPlan.value = false;
+  }
+}
 
 const generationState = reactive({
   loading: false,

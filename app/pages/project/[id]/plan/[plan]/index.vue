@@ -98,18 +98,19 @@
                 survey, so a file that already exists is worth offering
                 rather than making someone redraw it to get at it.
               -->
-              <a
-                v-if="lastGeneratedUrl"
-                :href="lastGeneratedUrl"
-                download
-                class="inline-flex items-center px-3 py-2 mr-2 text-sm rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:text-gray-300 dark:hover:bg-slate-800"
+              <button
+                v-if="hasGeneratedPlan"
+                type="button"
+                :disabled="downloadingPlan"
+                @click="downloadGeneratedPlan"
+                class="inline-flex items-center px-3 py-2 mr-2 text-sm rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-slate-700 dark:text-gray-300 dark:hover:bg-slate-800"
               >
                 <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
                 </svg>
-                Download plan
-              </a>
+                {{ downloadingPlan ? "Preparing…" : "Download plan" }}
+              </button>
               <button
                 @click="generatePlan"
                 :disabled="generationState.loading"
@@ -766,7 +767,10 @@ import { ref, reactive, onMounted, computed, watch } from "vue";
 import { useRoute } from "vue-router";
 import { navigateTo } from "#imports";
 import axios from "axios";
-import { generatePlan as requestPlanGeneration } from "~/composables/usePlanGeneration";
+import {
+  generatePlan as requestPlanGeneration,
+  getPlanDownloadUrl,
+} from "~/composables/usePlanGeneration";
 import { useCoordinatePrecision } from "~/composables/useCoordinatePrecision";
 import { formatPlanOrigin } from "~/utils/planOrigins";
 
@@ -996,7 +1000,7 @@ const computationView = computed(() => {
 const planData = reactive({
   basic: { name: "", type: "" },
   /** The last plan drawn for this record, if it has been generated before. */
-  generated: null as { url?: string; generated_at?: string } | null,
+  generated: null as { key?: string; generated_at?: string } | null,
   coordinates: [] as any[],
   parcels: [] as any[],
   drawing: { file: null as File | null, fileName: "" },
@@ -1249,16 +1253,42 @@ async function handleConvertToPlan(planType: string) {
   }
 }
 
-/**
- * The plan file to offer for download.
- *
- * Whatever was generated in this session, or failing that the last one the
- * record carries -- so returning to a finished plan offers the file rather
- * than only the button that would redraw it.
- */
-const lastGeneratedUrl = computed(
-  () => generationState.url || planData.generated?.url || "",
+/** Whether there is a drawing to download at all. */
+const hasGeneratedPlan = computed(
+  () => Boolean(generationState.url || planData.generated?.key),
 );
+
+const downloadingPlan = ref(false);
+
+/**
+ * Fetch a fresh link and save the file.
+ *
+ * The link is signed and short-lived, so it is asked for at the moment of the
+ * click rather than held in the page -- one kept around would either have
+ * expired or, worse, still be live.
+ */
+async function downloadGeneratedPlan() {
+  if (downloadingPlan.value) return;
+  downloadingPlan.value = true;
+  try {
+    const url = await getPlanDownloadUrl(planId);
+    const link = document.createElement("a");
+    link.href = url;
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch (error: any) {
+    toast?.add?.({
+      title: "Could not download the plan",
+      description:
+        error?.response?.data?.message || error?.message || "Please try again.",
+      color: "error",
+    });
+  } finally {
+    downloadingPlan.value = false;
+  }
+}
 
 async function generatePlan() {
   if (generationState.loading) return;

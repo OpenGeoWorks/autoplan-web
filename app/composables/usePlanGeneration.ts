@@ -129,3 +129,18 @@ export const describeProgress = (progress: GenerationProgress): string => {
   }
   return progress.stage.charAt(0).toUpperCase() + progress.stage.slice(1);
 };
+
+/**
+ * Ask for a link to this plan's last drawing.
+ *
+ * The archive is private and no link to it is stored, so one is minted on
+ * request for whoever owns the plan and stops working shortly afterwards.
+ * That is why this is a call rather than a URL held in the page: a link kept
+ * around would either be dead or, worse, still live.
+ */
+export async function getPlanDownloadUrl(planId: string): Promise<string> {
+  const { data } = await axios.get(`/plan/download/${planId}`);
+  const url = data?.data?.url;
+  if (!url) throw new Error("No generated plan is available to download");
+  return url;
+}
