@@ -660,13 +660,17 @@ const loading = computed(() => !!props.loading);
 /**
  * Scales the drawing engine knows.
  *
- * Its own ladder (`STANDARD_SCALES`), which is also what it falls back along
- * when a survey will not fit the sheet at the scale requested. Offering
- * anything outside it means the plan may be drawn at a scale that was never
- * on the menu -- 1:1500 was on this list and is not on that ladder.
+ * Its own ladder (`STANDARD_SCALES`) in full, which is also what it falls back
+ * along when a survey will not fit the sheet at the scale requested. Offering
+ * anything outside it means the plan may be drawn at a scale that was never on
+ * the menu -- 1:1500 was on this list and is not on that ladder.
+ *
+ * 1:50000 puts 8.5 km across an A4 sheet, which is a map rather than a survey
+ * plan, but it is what the engine falls back to for a site that large and
+ * there is no sense in the fallback existing where it cannot be chosen.
  */
 const PLAN_SCALES = [
-  100, 200, 250, 500, 1000, 1250, 2000, 2500, 5000, 10000, 20000,
+  100, 200, 250, 500, 1000, 1250, 2000, 2500, 5000, 10000, 20000, 50000,
 ] as const;
 
 // A plan saved at 1:1500, or at any scale since dropped from the list, keeps
