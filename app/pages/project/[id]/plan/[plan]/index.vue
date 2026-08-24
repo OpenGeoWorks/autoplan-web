@@ -420,7 +420,11 @@
               <h2
                 class="text-lg font-semibold text-gray-800 dark:text-gray-100"
               >
-                Coordinate Table
+                {{
+                  planData.basic.type === "topographic"
+                    ? "Spot Heights"
+                    : "Coordinate Table"
+                }}
               </h2>
               <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">
                 <!--
@@ -489,6 +493,78 @@
             </div>
             <div v-else class="text-sm text-gray-500 dark:text-gray-400">
               No coordinates added.
+            </div>
+          </div>
+
+          <!--
+            Boundary. Its own series, uploaded and stored separately from the
+            survey, and it had no table here at all -- a topographic plan
+            showed its spot heights and nothing of its perimeter.
+          -->
+          <div
+            v-if="!isComputationOnly && hasBoundary"
+            class="bg-white dark:bg-slate-800 rounded-lg shadow p-6"
+          >
+            <div class="flex items-center mb-4">
+              <h2
+                class="text-lg font-semibold text-gray-800 dark:text-gray-100"
+              >
+                Boundary
+              </h2>
+              <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                ({{ planData.boundary.length.toLocaleString() }})
+              </span>
+              <div class="ml-auto flex items-center gap-2">
+                <button
+                  @click="exportBoundary"
+                  :disabled="exportingBoundaryCsv"
+                  class="text-xs px-2 py-1 border rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 disabled:opacity-50 dark:hover:bg-slate-700"
+                  title="Download the boundary coordinates as CSV"
+                >
+                  {{ exportingBoundaryCsv ? "Preparing…" : "Export CSV" }}
+                </button>
+                <button
+                  v-if="planData.boundary.length > 10"
+                  @click="showAllBoundary = !showAllBoundary"
+                  class="text-xs px-2 py-1 border rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700"
+                >
+                  {{ showAllBoundary ? "Show Less" : "Show All" }}
+                </button>
+              </div>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="min-w-full text-sm">
+                <thead>
+                  <tr
+                    class="text-left text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-slate-700"
+                  >
+                    <th class="py-2 pr-4">Point ID</th>
+                    <th class="py-2 pr-4">Northing(mN)</th>
+                    <th class="py-2 pr-4">Easting(mE)</th>
+                    <th class="py-2 pr-4">Elevation(m)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="c in visibleBoundary"
+                    :key="c._key"
+                    class="border-b border-gray-100 dark:border-slate-700/60"
+                  >
+                    <td class="py-2 pr-4 text-gray-800 dark:text-gray-100">
+                      {{ c.point || "—" }}
+                    </td>
+                    <td class="py-2 pr-4 text-gray-800 dark:text-gray-100">
+                      {{ formatNumber(c.northing) }}
+                    </td>
+                    <td class="py-2 pr-4 text-gray-800 dark:text-gray-100">
+                      {{ formatNumber(c.easting) }}
+                    </td>
+                    <td class="py-2 pr-4 text-gray-800 dark:text-gray-100">
+                      {{ formatNumber(c.elevation) }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
 
@@ -1025,6 +1101,12 @@ const planData = reactive({
   generated: null as { key?: string; generated_at?: string } | null,
   /** Points held in the point store; the table shows a preview of them. */
   pointCount: 0,
+  /**
+   * The plan's perimeter: the topographic boundary or the layout site
+   * boundary. A separate series from the survey, uploaded separately and
+   * stored separately, and it had no table on this page at all.
+   */
+  boundary: [] as any[],
   coordinates: [] as any[],
   parcels: [] as any[],
   drawing: { file: null as File | null, fileName: "" },
@@ -1112,6 +1194,20 @@ async function fetchPlanData() {
         }));
       }
 
+      // Boundary. Topographic plans carry it as topographic_boundary and
+      // layout plans as layout_boundary; a plan has at most one.
+      const boundary =
+        data.topographic_boundary?.coordinates ??
+        data.layout_boundary?.coordinates ??
+        [];
+      planData.boundary = boundary.map((c: any) => ({
+        _key: crypto.randomUUID(),
+        point: c.id ?? "",
+        northing: c.northing ?? null,
+        easting: c.easting ?? null,
+        elevation: c.elevation ?? null,
+      }));
+
       // Parcels
       if (Array.isArray(data.parcels)) {
         planData.parcels = data.parcels.map((p: any) => ({
@@ -1177,6 +1273,44 @@ const visibleCoordinates = computed(() => {
   if (showAllCoordinates.value) return planData.coordinates;
   return planData.coordinates.slice(0, 10);
 });
+
+const showAllBoundary = ref(false);
+const visibleBoundary = computed(() =>
+  showAllBoundary.value ? planData.boundary : planData.boundary.slice(0, 10),
+);
+
+/** Boundaries are a handful of corners, so the table is the whole series. */
+const hasBoundary = computed(() => planData.boundary.length > 0);
+
+const exportingBoundaryCsv = ref(false);
+
+/** Download the perimeter. A different series from the survey, so a different
+ *  request -- the same endpoint asked for the other kind. */
+async function exportBoundary() {
+  if (exportingBoundaryCsv.value) return;
+  exportingBoundaryCsv.value = true;
+  try {
+    const { blob, fileName } = await exportCoordinatesCsv(planId, "boundary");
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName.replace(/\.csv$/, "_boundary.csv");
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast?.add?.({ title: "Boundary exported", color: "success" });
+  } catch (error: any) {
+    toast?.add?.({
+      title: "Could not export the boundary",
+      description:
+        error?.response?.data?.message || error?.message || "Please try again.",
+      color: "error",
+    });
+  } finally {
+    exportingBoundaryCsv.value = false;
+  }
+}
 
 /** How many points the plan holds: the stored survey, or the table when it is
  *  all there is. */
