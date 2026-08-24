@@ -241,7 +241,7 @@
           <label
             class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
             >Label Size
-            <InfoTip text="Printed height of the annotation on the map itself — beacon names, bearings and distances, quoted coordinates, spot heights and schedule text — in millimetres on the sheet. The surveyor's defaults are already legible at every scale, so this rarely needs changing. Default 2.5 mm." /></label
+            <InfoTip text="Printed height of the annotation on the map itself — beacon names, bearings and distances, quoted coordinates, spot heights and schedule text — in millimetres on the sheet. The surveyor's defaults are already legible at every scale, so this rarely needs changing. Default 2 mm." /></label
           >
           <input
             v-model.number="local.embellishment.label_size"
@@ -550,7 +550,7 @@ const emit = defineEmits(["update:modelValue", "complete", "refresh"]);
  */
 const DEFAULT_SIZES = {
   font_size: 3.5,
-  label_size: 2.5,
+  label_size: 2,
   footer_size: 2.5,
   beacon_size: 1.6,
 } as const;
