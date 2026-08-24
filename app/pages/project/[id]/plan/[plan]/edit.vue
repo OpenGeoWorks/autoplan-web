@@ -122,6 +122,7 @@
           />
           <!-- Step 5: Embellishment -->
           <StepEmbellishment
+            :plan-id="planId"
             :plan-type="planData.basic.type"
             v-else-if="currentStep === 5"
             :model-value="embellishmentModel"
@@ -188,6 +189,7 @@
           />
           <!-- Route Step 5: Embellishment -->
           <StepEmbellishment
+            :plan-id="planId"
             :plan-type="planData.basic.type"
             v-else-if="currentStep === 5"
             :model-value="embellishmentModel"
@@ -242,6 +244,7 @@
           />
           <!-- Layout Step 4: Embellishment -->
           <StepEmbellishment
+            :plan-id="planId"
             :plan-type="planData.basic.type"
             v-else-if="currentStep === 4"
             :model-value="embellishmentModel"
@@ -311,6 +314,7 @@
           />
           <!-- Step 5: Embellishment -->
           <StepEmbellishment
+            :plan-id="planId"
             :plan-type="planData.basic.type"
             v-else-if="currentStep === 5"
             :model-value="embellishmentModel"
