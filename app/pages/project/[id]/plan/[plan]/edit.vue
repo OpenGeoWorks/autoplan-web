@@ -161,6 +161,9 @@
           <StepRouteAlignment
             v-else-if="currentStep === 2"
             :model-value="alignmentModel"
+            :point-count="planData.pointCount"
+            :point-source="planData.pointSource"
+            @update:point-source="(v: any) => (planData.pointSource = v)"
             :elevation-ids="
               planData.elevations.map((e) => e.point).filter(Boolean)
             "

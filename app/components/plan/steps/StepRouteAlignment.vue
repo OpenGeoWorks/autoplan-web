@@ -105,6 +105,34 @@
       </div>
     </div>
 
+    <!-- An uploaded alignment is stored whole and previewed here. Editing a
+         preview would discard every station it does not show, so the table
+         says so and offers the file back instead. -->
+    <div
+      v-if="showingPreview"
+      class="mb-4 rounded-md border border-blue-300 bg-blue-50 dark:border-blue-800/60 dark:bg-blue-900/20 px-3 py-2"
+    >
+      <p class="text-xs text-blue-900 dark:text-blue-200">
+        These stations came from
+        <strong>{{ uploadedFileName || "an uploaded file" }}</strong
+        >. The alignment holds
+        <strong>{{ storedStationCount.toLocaleString() }}</strong> station{{
+          storedStationCount === 1 ? "" : "s"
+        }}
+        and the table shows the first {{ local.stations.length }} — the full
+        set is stored and used for the drawing. To change them, upload a
+        replacement file.
+      </p>
+      <button
+        type="button"
+        :disabled="removingUpload"
+        @click="onRemoveUpload"
+        class="mt-2 text-[11px] font-medium text-blue-700 hover:underline disabled:opacity-50 dark:text-blue-300"
+      >
+        {{ removingUpload ? "Removing…" : "Remove the uploaded file" }}
+      </button>
+    </div>
+
     <div
       class="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden mb-4"
     >
@@ -156,15 +184,20 @@
                   :type="col.type === 'text' ? 'text' : 'number'"
                   :step="col.type === 'text' ? undefined : '0.001'"
                   :placeholder="col.placeholder"
+                  :readonly="showingPreview"
                   :class="[
                     col.type === 'text' ? 'w-28' : 'w-40',
-                    'text-sm rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 px-2 py-1',
+                    'text-sm rounded border border-gray-300 dark:border-slate-600 text-gray-900 dark:text-gray-100 px-2 py-1',
+                    showingPreview
+                      ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed'
+                      : 'bg-white dark:bg-slate-700',
                   ]"
                   @input="setCell(row, col, ($event.target as HTMLInputElement).value)"
                 />
               </td>
               <td class="px-3 py-1.5">
                 <button
+                  v-if="!showingPreview"
                   @click="local.stations.splice(idx, 1)"
                   class="text-red-500 hover:text-red-700 text-xs"
                 >
@@ -218,6 +251,12 @@
       @confirm="onMappingConfirmed"
       @reorder="setOrder"
     />
+
+    <UploadProgressOverlay
+      :show="uploadingFile"
+      :label="uploadProgress"
+      :percent="uploadPercent"
+    />
   </div>
 </template>
 
@@ -226,6 +265,12 @@ import { reactive, ref, computed, watch } from "vue";
 import { useRoute } from "vue-router";
 import InfoTip from "~/components/InfoTip.vue";
 import { parseTable } from "~/composables/useSheetParser";
+import UploadProgressOverlay from "~/components/UploadProgressOverlay.vue";
+import {
+  clearUploadedCoordinates,
+  previewColumns,
+  uploadCoordinateFile,
+} from "~/composables/useCoordinateUpload";
 import CoordinateColumnMapper from "~/components/CoordinateColumnMapper.vue";
 import {
   ID_FIELD,
@@ -263,11 +308,34 @@ const showMapper = ref(false);
 const rawRows = ref<string[][]>([]);
 
 function setCell(row: any, col: FieldDef, value: string) {
+  // The table is a preview of an uploaded file, and the file is the record
+  // of the alignment. Typing into it would change a row the drawing never
+  // reads.
+  if (showingPreview.value) return;
   row[col.key] =
     col.type === "text" ? value : value === "" ? null : Number(value);
 }
 
-function onMappingConfirmed(mapped: MappedRow[]) {
+/**
+ * The user has said which column is which.
+ *
+ * For a delimited file the rows never came here: the dialog worked from the
+ * sample the server returned, and what it produces is a set of column indices
+ * the server applies to the whole file. Only an Excel sheet, which cannot be
+ * streamed, still carries its rows to this point.
+ */
+async function onMappingConfirmed(
+  mapped: MappedRow[],
+  columns: { mapping: Record<string, number | null>; hasHeader: boolean },
+) {
+  const file = pendingFile.value;
+  pendingFile.value = null;
+
+  if (file) {
+    await sendAlignmentFile(file, columns.mapping);
+    return;
+  }
+
   const parsed = mapped.map((m) => ({
     _key: crypto.randomUUID(),
     point: String(m.point ?? ""),
@@ -303,10 +371,19 @@ interface AlignmentData {
 const props = defineProps<{
   modelValue: AlignmentData;
   elevationIds: string[];
+  /** Stations held in the point store; the table below shows a preview. */
+  pointCount?: number;
+  /**
+   * Set when the alignment came from a file. The file is then the record of
+   * it and this table is a preview, so the rows are not edited here --
+   * changing them means uploading a different file.
+   */
+  pointSource?: { file_name?: string; uploaded_at?: string } | null;
 }>();
 
 const emit = defineEmits<{
   "update:model-value": [value: AlignmentData];
+  "update:pointSource": [value: { file_name?: string; uploaded_at?: string } | null];
   complete: [];
 }>();
 
@@ -314,6 +391,7 @@ const route = useRoute();
 const toast = useToast();
 const loading = ref(false);
 const fileInputRef = ref<HTMLInputElement | null>(null);
+const planId = computed(() => route.params.plan as string);
 
 const local = reactive<AlignmentData>({
   stations: props.modelValue.stations.map((s) => ({ ...s })),
@@ -364,22 +442,188 @@ function downloadTemplate() {
   URL.revokeObjectURL(url);
 }
 
+// --- Alignment uploads ------------------------------------------------------
+// The same route every other coordinate file takes: the browser hands the
+// file to the server and the server parses it. This step used to read the
+// whole thing with a FileReader and parse it here, which is what made the
+// coordinate step lock up the tab on a large survey -- a route alignment is
+// usually short, but "usually" is not a reason to keep the one path that
+// cannot cope when it is not.
+const uploadingFile = ref(false);
+const uploadProgress = ref("");
+const uploadPercent = ref(0);
+/** The file waiting on a column mapping; null when the rows are already here
+ *  (an Excel sheet), set when only a preview of them is. */
+const pendingFile = ref<File | null>(null);
+const storedStationCount = ref(props.pointCount ?? 0);
+const uploadedThisSession = ref(false);
+const removingUpload = ref(false);
+
+/**
+ * Whether the alignment is a file rather than this table.
+ *
+ * True on a revisit as well as in the session that uploaded, because the
+ * table is a preview either way -- editing it would throw away every station
+ * it does not show.
+ */
+const uploaded = computed(
+  () => uploadedThisSession.value || Boolean(props.pointSource?.uploaded_at),
+);
+const uploadedFileName = computed(() => props.pointSource?.file_name ?? "");
+const showingPreview = computed(
+  () => uploaded.value || storedStationCount.value > local.stations.length,
+);
+
+/** Discard an uploaded alignment and go back to typing stations by hand. */
+async function onRemoveUpload() {
+  const total = storedStationCount.value.toLocaleString();
+  if (
+    !window.confirm(
+      `Remove the ${total} uploaded stations from this plan?\n\n` +
+        "The alignment will be discarded and you can enter stations by hand. " +
+        "This cannot be undone.",
+    )
+  ) {
+    return;
+  }
+
+  removingUpload.value = true;
+  try {
+    await clearUploadedCoordinates(planId.value, "coordinates");
+    uploadedThisSession.value = false;
+    emit("update:pointSource", null);
+    storedStationCount.value = 0;
+    local.stations = [];
+    toast.add({ title: "Uploaded stations removed", color: "success" });
+  } catch (err: any) {
+    toast.add({
+      title: "Could not remove the uploaded stations",
+      description: err?.response?.data?.message || err?.message,
+      color: "error",
+    });
+  } finally {
+    removingUpload.value = false;
+  }
+}
+
+watch(
+  () => props.pointCount,
+  (count) => {
+    if (typeof count === "number") storedStationCount.value = count;
+  },
+);
+
+async function sendAlignmentFile(file: File, mapping?: unknown) {
+  uploadingFile.value = true;
+  uploadPercent.value = 0;
+  uploadProgress.value = "Uploading the file…";
+  try {
+    const outcome = await uploadCoordinateFile(planId.value, file, {
+      mapping,
+      // A route's stations are the plan's coordinates, the same series a
+      // cadastral survey uses -- so this needs no kind of its own.
+      kind: "coordinates",
+      // The dialog names its id field after the table column it fills.
+      idKey: "point",
+      onProgress: (p) => {
+        // Sending is a real percentage; storing is not, so the bar goes
+        // indeterminate rather than parking at 100 and looking stuck.
+        uploadPercent.value = p.phase === "sending" ? p.percent : 0;
+        uploadProgress.value = p.label;
+      },
+    });
+
+    uploadedThisSession.value = true;
+    storedStationCount.value = outcome.pointCount;
+    // Tell the page straight away, or Save & Continue will post this preview
+    // to the edit endpoint and be refused.
+    emit("update:pointSource", outcome.pointSource ?? null);
+    // Only the preview reaches the table; the stations themselves stay in
+    // the point store.
+    local.stations = outcome.preview.map((c: any) => ({
+      _key: crypto.randomUUID(),
+      point: c.id ?? "",
+      northing: c.northing ?? null,
+      easting: c.easting ?? null,
+    }));
+
+    toast.add({
+      title: `Imported ${outcome.pointCount.toLocaleString()} station${
+        outcome.pointCount === 1 ? "" : "s"
+      }`,
+      description:
+        (outcome.pointCount > local.stations.length
+          ? `Showing the first ${local.stations.length} in the table. `
+          : "") +
+        (outcome.skipped
+          ? `${outcome.skipped} row(s) could not be read and were skipped.`
+          : ""),
+      color: "success",
+    });
+  } catch (err: any) {
+    toast.add({
+      title: "Could not import that file",
+      description: err?.response?.data?.message || err?.message,
+      color: "error",
+    });
+  } finally {
+    uploadingFile.value = false;
+    uploadProgress.value = "";
+    uploadPercent.value = 0;
+  }
+}
+
 async function onFile(event: Event) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
   if (!file) return;
-  const isExcel = /\.(xls|xlsx)$/i.test(file.name);
-  const reader = new FileReader();
-  reader.onload = async () => {
-    const rows = await parseTable(
-      isExcel ? (reader.result as ArrayBuffer) : String(reader.result || "")
-    );
-    if (fileInputRef.value) fileInputRef.value.value = "";
-    rawRows.value = rows as string[][];
+
+  if (fileInputRef.value) fileInputRef.value.value = "";
+
+  // Excel cannot be streamed -- it is a zip of XML that has to be inflated
+  // whole -- so it stays a client-side parse. Delimited text is read by the
+  // server, whatever its size.
+  if (/\.(xls|xlsx)$/i.test(file.name)) {
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const rows = (await parseTable(reader.result as ArrayBuffer)) as string[][];
+        if (!rows?.length) {
+          toast.add({ title: "No rows found in file", color: "warning" });
+          return;
+        }
+        pendingFile.value = null;
+        rawRows.value = rows;
+        showMapper.value = true;
+      };
+      reader.readAsArrayBuffer(file);
+    } catch {
+      toast.add({ title: "Could not read file", color: "error" });
+    }
+    return;
+  }
+
+  uploadingFile.value = true;
+  uploadProgress.value = "Reading the first few rows…";
+  try {
+    // Only the head of the file goes up, and only a sample of rows comes
+    // back -- enough for the dialog to show which column is which.
+    const preview = await previewColumns(file);
+    pendingFile.value = file;
+    rawRows.value = preview.hasHeader
+      ? [preview.headers, ...preview.sampleRows]
+      : preview.sampleRows;
     showMapper.value = true;
-  };
-  if (isExcel) reader.readAsArrayBuffer(file);
-  else reader.readAsText(file);
+  } catch (err: any) {
+    toast.add({
+      title: "Could not read that file",
+      description: err?.response?.data?.message || err?.message,
+      color: "error",
+    });
+  } finally {
+    uploadingFile.value = false;
+    uploadProgress.value = "";
+  }
 }
 
 function addRow() {
@@ -439,7 +683,12 @@ async function saveAndContinue() {
     const planId = route.params.plan as string;
     const { $axios } = useNuxtApp();
 
-    if (filledStations.value.length >= 2) {
+    // An uploaded alignment is already stored and this table holds only a
+    // preview of it, so posting the table back would ask the server to
+    // replace the alignment with its own first two hundred stations, which it
+    // refuses. Only a typed table is saved from here -- the same rule the
+    // coordinate step follows.
+    if (!showingPreview.value && filledStations.value.length >= 2) {
       await $axios.put(`/plan/coordinates/edit/${planId}`, {
         coordinates: filledStations.value.map((s) => ({
           id: s.point,
