@@ -72,7 +72,7 @@
       <!-- Field slots (drop targets) -->
       <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div
-          v-for="field in fields"
+          v-for="field in displayFields"
           :key="field.key"
           @dragover.prevent
           @drop="onDropToField(field.key)"
@@ -104,6 +104,7 @@
             <div
               v-if="mapping[field.key] !== null"
               draggable="true"
+              title="Drag onto another field to move this column"
               @dragstart.stop="onDragStart(mapping[field.key] as number, field.key)"
               @dragend="dragCol = null"
               @click.stop="pick(mapping[field.key] as number)"
@@ -129,7 +130,7 @@
       <p v-if="missingRequired.length" class="mt-2 text-xs text-red-600">
         Assign a column for:
         {{
-          fields
+          displayFields
             .filter((f) => missingRequired.includes(f.key))
             .map((f) => f.label)
             .join(", ")
@@ -145,7 +146,11 @@
           <table class="min-w-full text-xs">
             <thead class="bg-gray-50 dark:bg-slate-700/50">
               <tr class="text-left text-gray-600 dark:text-gray-300">
-                <th v-for="field in fields" :key="field.key" class="px-3 py-2">
+                <th
+                  v-for="field in displayFields"
+                  :key="field.key"
+                  class="px-3 py-2"
+                >
                   {{ field.label }}
                 </th>
               </tr>
@@ -157,7 +162,7 @@
                 class="border-t border-gray-100 dark:border-slate-700/60"
               >
                 <td
-                  v-for="field in fields"
+                  v-for="field in displayFields"
                   :key="field.key"
                   class="px-3 py-1.5 text-gray-800 dark:text-gray-100 font-mono"
                 >
@@ -166,7 +171,7 @@
               </tr>
               <tr v-if="!previewRows.length">
                 <td
-                  :colspan="fields.length"
+                  :colspan="displayFields.length"
                   class="px-3 py-3 text-center text-gray-400"
                 >
                   No data rows detected.
@@ -236,8 +241,6 @@ const emit = defineEmits<{
     rows: MappedRow[],
     columns: { mapping: ColumnMapping; hasHeader: boolean },
   ): void;
-  /** New column order after a slot was dragged onto another slot. */
-  (e: "reorder", order: FieldDef[]): void;
   (e: "cancel"): void;
 }>();
 
@@ -247,10 +250,20 @@ const hasHeader = ref(false);
 const mapping = ref<ColumnMapping>(emptyMapping(props.fields));
 const pickedCol = ref<number | null>(null); // tap-to-place selection
 const dragCol = ref<number | null>(null); // drag source
-// Set when the drag began on a filled field slot rather than the tray. Moving
-// a slot onto another reorders the columns; it must not re-point a field at a
-// different source column, which is how a heading ends up over wrong values.
-const dragFromField = ref<FieldKey | null>(null);
+// Set when a drag or tap began on a filled field slot rather than the tray.
+const fromField = ref<FieldKey | null>(null);
+
+/**
+ * The field slots in display order, which the user can rearrange by dragging
+ * one filled slot onto another. Only the order changes: a field keeps the
+ * source column it was mapped to, so its heading and its values travel
+ * together. Re-pointing a field at a different column is a separate gesture —
+ * send the column back to the tray, then place it where it belongs.
+ *
+ * This order is local to the modal. It decides how the slots and the preview
+ * read; the table behind the modal keeps its own declared column order.
+ */
+const displayFields = ref<FieldDef[]>([...props.fields]);
 
 // Re-detect and prefill whenever the modal opens with new rows.
 watch(
@@ -262,6 +275,7 @@ watch(
     const remembered = loadSessionMapping(mappingSignature(d, props.fields));
     mapping.value = remembered ? { ...remembered } : autoDetectMapping(d, props.fields);
     pickedCol.value = null;
+    displayFields.value = [...props.fields];
   },
   { immediate: true },
 );
@@ -321,24 +335,44 @@ const missingRequired = computed<FieldKey[]>(() =>
   unmappedRequiredFields(mapping.value, props.fields).map((f) => f.key),
 );
 
-// --- Assignment (swap semantics: a column lives in at most one field) ---
+/** The field currently holding this column, if any. */
+function fieldHolding(col: number): FieldKey | null {
+  return props.fields.find((f) => mapping.value[f.key] === col)?.key ?? null;
+}
+
+/** Point a field at a column from the tray, evicting whatever sat there. */
 function assign(col: number, field: FieldKey) {
-  const from =
-    props.fields.find((f) => mapping.value[f.key] === col)?.key ?? null;
-  if (from === field) {
-    pickedCol.value = null;
-    return;
-  }
-
-  // Whatever was in the target field takes the dragged column's place, so two
-  // filled fields trade rather than the occupant being thrown back to the tray.
-  // A column dragged from the tray has no place to give, so the occupant
-  // returns to the tray as before.
-  const displaced = mapping.value[field];
   mapping.value[field] = col;
-  if (from !== null) mapping.value[from] = displaced;
-
   pickedCol.value = null;
+}
+
+/** Move a placed field to another field's position, mapping untouched. */
+function moveField(from: FieldKey, to: FieldKey) {
+  const next = [...displayFields.value];
+  const fromIdx = next.findIndex((f) => f.key === from);
+  const toIdx = next.findIndex((f) => f.key === to);
+  if (fromIdx !== -1 && toIdx !== -1) {
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved!);
+    displayFields.value = next;
+  }
+  pickedCol.value = null;
+}
+
+/**
+ * A placement lands one of two ways, and both input modes agree on which:
+ * a column already sitting in a field moves that field — heading and values
+ * together — while one coming from the tray re-points the field it lands on.
+ */
+function place(col: number, field: FieldKey) {
+  const origin = fromField.value ?? fieldHolding(col);
+  if (origin === field) {
+    pickedCol.value = null;
+  } else if (origin !== null) {
+    moveField(origin, field);
+  } else {
+    assign(col, field);
+  }
 }
 
 function unassign(field: FieldKey) {
@@ -350,35 +384,22 @@ function pick(col: number) {
   pickedCol.value = pickedCol.value === col ? null : col;
 }
 function onSlotClick(field: FieldKey) {
-  if (pickedCol.value !== null) assign(pickedCol.value, field);
+  if (pickedCol.value !== null) place(pickedCol.value, field);
 }
 
 // Native drag-and-drop.
-function onDragStart(col: number, fromField: FieldKey | null = null) {
+function onDragStart(col: number, origin: FieldKey | null = null) {
   dragCol.value = col;
-  dragFromField.value = fromField;
+  fromField.value = origin;
   pickedCol.value = null;
 }
 function onDropToField(field: FieldKey) {
-  if (dragFromField.value && dragFromField.value !== field) {
-    // Slot onto slot: move the column, carrying its heading and its data.
-    const next = [...props.fields];
-    const from = next.findIndex((f) => f.key === dragFromField.value);
-    const to = next.findIndex((f) => f.key === field);
-    if (from !== -1 && to !== -1) {
-      const [moved] = next.splice(from, 1);
-      next.splice(to, 0, moved!);
-      emit("reorder", next);
-    }
-  } else if (dragCol.value !== null) {
-    // Tray onto slot: assign this source column to the field.
-    assign(dragCol.value, field);
-  }
+  if (dragCol.value !== null) place(dragCol.value, field);
   dragCol.value = null;
-  dragFromField.value = null;
+  fromField.value = null;
 }
 function onDropToTray() {
-  dragFromField.value = null;
+  fromField.value = null;
   // Dropping back into the tray unassigns wherever the column currently sits.
   if (dragCol.value === null) return;
   for (const f of props.fields) {

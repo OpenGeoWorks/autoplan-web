@@ -88,17 +88,7 @@
                 <th
                   v-for="col in tableColumns"
                   :key="col.key"
-                  draggable="true"
-                  :title="`Drag to move the ${col.label} column`"
-                  @dragstart="onHeaderDragStart(col.key)"
-                  @dragover.prevent="onHeaderDragOver(col.key)"
-                  @drop.prevent="onHeaderDrop(col.key)"
-                  @dragend="onHeaderDragEnd"
-                  class="cursor-grab active:cursor-grabbing select-none text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300"
-                                :class="[
-                  dragKey === col.key ? 'opacity-40' : '',
-                  overKey === col.key ? 'bg-blue-100 dark:bg-blue-900/40' : '',
-                  ]"
+                  class="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300"
                 >
                   {{ col.label }}
                 </th>
@@ -233,7 +223,6 @@
     :rows="rawRows"
     :fields="tableColumns"
     @confirm="onMappingConfirmed"
-    @reorder="setOrder"
   />
 
   <!-- Save Computation Modal -->
@@ -260,7 +249,6 @@ import {
   type FieldDef,
   type MappedRow,
 } from "~/utils/columnMapping";
-import { useColumnOrder, applyStoredOrder } from "~/composables/useColumnOrder";
 
 definePageMeta({ middleware: ["auth"] });
 
@@ -293,22 +281,8 @@ const MAPPER_FIELDS: FieldDef[] = [
   { ...ELEVATION_FIELD, label: "Elevation(m)", placeholder: "optional" },
 ];
 
-/** Column order of the table; follows the uploaded file once mapped. */
-const tableColumns = ref<FieldDef[]>(
-  applyStoredOrder("back-computation", MAPPER_FIELDS),
-);
-
-// Dragging a heading moves the column and its data; it does not change which
-// uploaded column feeds the field.
-const {
-  setOrder,
-  dragKey,
-  overKey,
-  onHeaderDragStart,
-  onHeaderDragOver,
-  onHeaderDrop,
-  onHeaderDragEnd,
-} = useColumnOrder("back-computation", tableColumns);
+/** Columns of the table, in their declared order. */
+const tableColumns: FieldDef[] = MAPPER_FIELDS;
 const showMapper = ref(false);
 const rawRows = ref<string[][]>([]);
 

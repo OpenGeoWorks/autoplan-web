@@ -135,17 +135,7 @@
             <th
               v-for="col in tableColumns"
               :key="col.key"
-              draggable="true"
-              :title="`Drag to move the ${col.label} column`"
-              class="px-3 py-2 text-left cursor-grab active:cursor-grabbing select-none"
-              :class="[
-                dragKey === col.key ? 'opacity-40' : '',
-                overKey === col.key ? 'bg-blue-100 dark:bg-blue-900/40' : '',
-              ]"
-              @dragstart="onHeaderDragStart(col.key)"
-              @dragover.prevent="onHeaderDragOver(col.key)"
-              @drop.prevent="onHeaderDrop(col.key)"
-              @dragend="onHeaderDragEnd"
+              class="px-3 py-2 text-left"
             >
               {{ col.label }}
             </th>
@@ -284,7 +274,6 @@
     :rows="rawRows"
     :fields="tableColumns"
     @confirm="onMappingConfirmed"
-    @reorder="setOrder"
   />
 </template>
 
@@ -309,7 +298,6 @@ import {
   type FieldDef,
   type MappedRow,
 } from "~/utils/columnMapping";
-import { useColumnOrder, applyStoredOrder } from "~/composables/useColumnOrder";
 import type { CadInspection, CadStation } from "~/utils/cadImport";
 import { isCadFile } from "~/utils/cadImport";
 
@@ -522,26 +510,10 @@ const MAPPER_FIELDS: FieldDef[] = [
 ];
 
 /**
- * Column order of the table below. Starts at the declared order and follows
- * the uploaded file once a mapping is confirmed, so the table reads the way
- * the surveyor's own file does. The Remove button is not a field and stays
- * pinned at the end.
+ * Columns of the table below, in their declared order. The Remove button is
+ * not a field and stays pinned at the end.
  */
-const tableColumns = ref<FieldDef[]>(
-  applyStoredOrder("coordinates", MAPPER_FIELDS),
-);
-
-// Dragging a heading moves the column and its data; it does not change which
-// uploaded column feeds the field.
-const {
-  setOrder,
-  dragKey,
-  overKey,
-  onHeaderDragStart,
-  onHeaderDragOver,
-  onHeaderDrop,
-  onHeaderDragEnd,
-} = useColumnOrder("coordinates", tableColumns);
+const tableColumns: FieldDef[] = MAPPER_FIELDS;
 
 /** Write a cell back, parsing to a number unless the field is text. */
 function setCell(row: CoordRow, col: FieldDef, value: string) {

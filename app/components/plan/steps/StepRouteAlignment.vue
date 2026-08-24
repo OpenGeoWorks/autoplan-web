@@ -145,17 +145,7 @@
               <th
                 v-for="col in tableColumns"
                 :key="col.key"
-                draggable="true"
-                :title="`Drag to move the ${col.label} column`"
-                @dragstart="onHeaderDragStart(col.key)"
-                @dragover.prevent="onHeaderDragOver(col.key)"
-                @drop.prevent="onHeaderDrop(col.key)"
-                @dragend="onHeaderDragEnd"
-                class="cursor-grab active:cursor-grabbing select-none px-3 py-2 text-left"
-                              :class="[
-                dragKey === col.key ? 'opacity-40' : '',
-                overKey === col.key ? 'bg-blue-100 dark:bg-blue-900/40' : '',
-                ]"
+                class="px-3 py-2 text-left"
               >
                 <span class="flex items-center gap-1">
                   {{ col.label }}
@@ -249,7 +239,6 @@
       :rows="rawRows"
       :fields="tableColumns"
       @confirm="onMappingConfirmed"
-      @reorder="setOrder"
     />
 
     <UploadProgressOverlay
@@ -279,7 +268,6 @@ import {
   type FieldDef,
   type MappedRow,
 } from "~/utils/columnMapping";
-import { useColumnOrder, applyStoredOrder } from "~/composables/useColumnOrder";
 
 // Keyed by the property each value lands on in a station row.
 const MAPPER_FIELDS: FieldDef[] = [
@@ -288,22 +276,8 @@ const MAPPER_FIELDS: FieldDef[] = [
   { ...EASTING_FIELD, label: "Easting (m)" },
 ];
 
-/** Column order of the table; follows the uploaded file once mapped. */
-const tableColumns = ref<FieldDef[]>(
-  applyStoredOrder("route-alignment", MAPPER_FIELDS),
-);
-
-// Dragging a heading moves the column and its data; it does not change which
-// uploaded column feeds the field.
-const {
-  setOrder,
-  dragKey,
-  overKey,
-  onHeaderDragStart,
-  onHeaderDragOver,
-  onHeaderDrop,
-  onHeaderDragEnd,
-} = useColumnOrder("route-alignment", tableColumns);
+/** Columns of the table, in their declared order. */
+const tableColumns: FieldDef[] = MAPPER_FIELDS;
 const showMapper = ref(false);
 const rawRows = ref<string[][]>([]);
 

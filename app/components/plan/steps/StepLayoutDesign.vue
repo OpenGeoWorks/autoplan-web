@@ -241,17 +241,7 @@
                 <th
                   v-for="col in cornerColumns"
                   :key="col.key"
-                  draggable="true"
-                  :title="`Drag to move the ${col.label} column`"
-                  class="px-3 py-2 text-left cursor-grab active:cursor-grabbing select-none"
-                  :class="[
-                    dragKey === col.key ? 'opacity-40' : '',
-                    overKey === col.key ? 'bg-blue-100 dark:bg-blue-900/40' : '',
-                  ]"
-                  @dragstart="onHeaderDragStart(col.key)"
-                  @dragover.prevent="onHeaderDragOver(col.key)"
-                  @drop.prevent="onHeaderDrop(col.key)"
-                  @dragend="onHeaderDragEnd"
+                  class="px-3 py-2 text-left"
                 >
                   {{ col.label }}
                 </th>
@@ -460,7 +450,6 @@ import {
   EASTING_FIELD,
   type FieldDef,
 } from "~/utils/columnMapping";
-import { useColumnOrder, applyStoredOrder } from "~/composables/useColumnOrder";
 
 // Only the corners table carries coordinates; plots and roads list ids and
 // dimensions, so neither has a northing/easting order to argue about.
@@ -470,18 +459,7 @@ const CORNER_FIELDS: FieldDef[] = [
   { ...EASTING_FIELD, label: "Easting (m)" },
 ];
 
-const cornerColumns = ref<FieldDef[]>(
-  applyStoredOrder("layout-corners", CORNER_FIELDS),
-);
-
-const {
-  dragKey,
-  overKey,
-  onHeaderDragStart,
-  onHeaderDragOver,
-  onHeaderDrop,
-  onHeaderDragEnd,
-} = useColumnOrder("layout-corners", cornerColumns);
+const cornerColumns: FieldDef[] = CORNER_FIELDS;
 
 function setCornerCell(row: any, col: FieldDef, value: string) {
   row[col.key] =
