@@ -213,10 +213,13 @@
             v-model="local.embellishment.scale"
             class="w-full text-sm rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="500">1:500</option>
-            <option value="1000">1:1000</option>
-            <option value="1500">1:1500</option>
-            <option value="2000">1:2000</option>
+            <!-- A plan saved at a scale outside the list keeps it selectable. -->
+            <option v-if="hasCustomScale" :value="local.embellishment.scale">
+              1:{{ Number(local.embellishment.scale).toLocaleString() }}
+            </option>
+            <option v-for="s in PLAN_SCALES" :key="s" :value="s">
+              1:{{ s.toLocaleString() }}
+            </option>
           </select>
         </div>
         <div>
@@ -653,6 +656,29 @@ watch(
 );
 
 const loading = computed(() => !!props.loading);
+
+/**
+ * Scales the drawing engine knows.
+ *
+ * Its own ladder (`STANDARD_SCALES`), which is also what it falls back along
+ * when a survey will not fit the sheet at the scale requested. Offering
+ * anything outside it means the plan may be drawn at a scale that was never
+ * on the menu -- 1:1500 was on this list and is not on that ladder.
+ */
+const PLAN_SCALES = [
+  100, 200, 250, 500, 1000, 1250, 2000, 2500, 5000, 10000, 20000,
+] as const;
+
+// A plan saved at 1:1500, or at any scale since dropped from the list, keeps
+// its value rather than silently reading as blank.
+const hasCustomScale = computed(() => {
+  const scale = Number(local.embellishment.scale);
+  return (
+    Number.isFinite(scale) &&
+    scale > 0 &&
+    !(PLAN_SCALES as readonly number[]).includes(scale)
+  );
+});
 
 // A plan saved before the dropdown existed may hold a state name we don't list.
 const hasCustomState = computed(() => {
