@@ -190,7 +190,7 @@
           <label
             class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
             >Title Size
-            <InfoTip text="Printed height of the plan title, in millimetres on the sheet. Moves the title block only — the area, origin and scale bar follow it, and the rest of the plan is unaffected. Default 5 mm." /></label
+            <InfoTip text="Printed height of the plan title, in millimetres on the sheet. Moves the title block only — the area, origin and scale bar follow it, and the rest of the plan is unaffected. The whole block is one size. Default 3.5 mm." /></label
           >
           <input
             v-model.number="local.embellishment.font_size"
@@ -213,11 +213,40 @@
             v-model="local.embellishment.scale"
             class="w-full text-sm rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="500">1:500</option>
-            <option value="1000">1:1000</option>
-            <option value="1500">1:1500</option>
-            <option value="2000">1:2000</option>
+            <!-- A plan saved at a scale outside the list keeps it selectable. -->
+            <option v-if="hasCustomScale" :value="local.embellishment.scale">
+              1:{{ Number(local.embellishment.scale).toLocaleString() }}
+            </option>
+            <!--
+              A scale the survey does not fit at is shown but not selectable:
+              the engine would overrule it, and hiding it entirely leaves the
+              user wondering where 1:500 went.
+            -->
+            <option
+              v-for="s in PLAN_SCALES"
+              :key="s"
+              :value="s"
+              :disabled="!fits(s)"
+            >
+              1:{{ s.toLocaleString() }}
+              <template v-if="s === recommendedScale"> — fits best</template>
+              <template v-else-if="!fits(s)"> — too large for this sheet</template>
+            </option>
           </select>
+          <p
+            v-if="scaleNote"
+            class="mt-1 text-[11px] leading-snug text-gray-500 dark:text-gray-400"
+          >
+            {{ scaleNote }}
+          </p>
+          <button
+            v-if="recommendedScale && Number(local.embellishment.scale) !== recommendedScale"
+            type="button"
+            class="mt-1 text-[11px] font-medium text-blue-600 hover:underline dark:text-blue-400"
+            @click="local.embellishment.scale = recommendedScale"
+          >
+            Use 1:{{ recommendedScale.toLocaleString() }}
+          </button>
         </div>
         <div>
           <label
@@ -238,7 +267,7 @@
           <label
             class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
             >Label Size
-            <InfoTip text="Printed height of the annotation on the map itself — beacon names, bearings and distances, quoted coordinates, spot heights and schedule text — in millimetres on the sheet. The surveyor's defaults are already legible at every scale, so this rarely needs changing. Default 2.5 mm." /></label
+            <InfoTip text="Printed height of the annotation on the map itself — beacon names, bearings and distances, quoted coordinates, spot heights and schedule text — in millimetres on the sheet. The surveyor's defaults are already legible at every scale, so this rarely needs changing. Default 2 mm." /></label
           >
           <input
             v-model.number="local.embellishment.label_size"
@@ -504,7 +533,11 @@
 import InfoTip from "~/components/InfoTip.vue";
 import { NIGERIA_STATES } from "~/utils/nigeriaStates";
 import { PLAN_ORIGINS } from "~/utils/planOrigins";
-import { reactive, watch, computed, onMounted } from "vue";
+import { reactive, ref, watch, computed, onMounted } from "vue";
+import {
+  getPlanScaleOptions,
+  type PlanScaleOptions,
+} from "~/composables/usePlanGeneration";
 
 interface EmbellishmentState {
   name: string;
@@ -535,6 +568,7 @@ const props = defineProps<{
   modelValue: { embellishment: EmbellishmentState };
   loading?: boolean;
   planType?: string;
+  planId?: string;
 }>();
 const emit = defineEmits(["update:modelValue", "complete", "refresh"]);
 
@@ -546,8 +580,8 @@ const emit = defineEmits(["update:modelValue", "complete", "refresh"]);
  * the plan will actually be drawn at.
  */
 const DEFAULT_SIZES = {
-  font_size: 5,
-  label_size: 2.5,
+  font_size: 3.5,
+  label_size: 2,
   footer_size: 2.5,
   beacon_size: 1.6,
 } as const;
@@ -653,6 +687,95 @@ watch(
 );
 
 const loading = computed(() => !!props.loading);
+
+/**
+ * Scales the drawing engine knows.
+ *
+ * Its own ladder (`STANDARD_SCALES`) in full, which is also what it falls back
+ * along when a survey will not fit the sheet at the scale requested. Offering
+ * anything outside it means the plan may be drawn at a scale that was never on
+ * the menu -- 1:1500 was on this list and is not on that ladder.
+ *
+ * 1:50000 puts 8.5 km across an A4 sheet, which is a map rather than a survey
+ * plan, but it is what the engine falls back to for a site that large and
+ * there is no sense in the fallback existing where it cannot be chosen.
+ */
+const PLAN_SCALES = [
+  100, 200, 250, 500, 1000, 1250, 2000, 2500, 5000, 10000, 20000, 50000,
+] as const;
+
+/**
+ * Which of those scales this survey actually holds on the chosen sheet.
+ *
+ * The list above is the whole ladder, and for any given plan most of it is
+ * unusable: the engine zooms out to the largest scale that fits rather than
+ * draw off the sheet, so picking 1:500 for a 200 m site produced a 1:2000
+ * drawing and a note afterwards. The engine is asked which ones are real,
+ * because the answer depends on the measured title height, the schedule band
+ * and the longest station id -- none of which this page can see.
+ *
+ * Null while unknown, and the dropdown then behaves as it always did. A menu
+ * that quietly offers everything is what we already had; a menu that offers
+ * nothing because a request failed would be worse.
+ */
+const scaleAdvice = ref<PlanScaleOptions | null>(null);
+const scaleAdviceError = ref(false);
+
+const fits = (scale: number) =>
+  !scaleAdvice.value || scaleAdvice.value.fits.includes(scale);
+
+const recommendedScale = computed(() => scaleAdvice.value?.recommended ?? null);
+
+const scaleNote = computed(() => {
+  const advice = scaleAdvice.value;
+  if (!advice || !advice.ground) return "";
+  const site = `${advice.ground.width.toFixed(0)} × ${advice.ground.height.toFixed(0)} m`;
+  if (advice.recommended === null) {
+    return `This ${site} site does not fit ${advice.page_size} ${advice.page_orientation} at any scale — choose a larger sheet.`;
+  }
+  return `${site} on ${advice.page_size} ${advice.page_orientation}: 1:${advice.recommended.toLocaleString()} is the largest that fits.`;
+});
+
+/**
+ * Re-asked whenever something that moves the answer changes. The sheet and
+ * the schedules are the whole input on this form: the site itself is fixed by
+ * the coordinates, which are not edited here.
+ */
+const refreshScaleAdvice = async () => {
+  if (!props.planId) return;
+  try {
+    scaleAdvice.value = await getPlanScaleOptions(props.planId);
+    scaleAdviceError.value = false;
+  } catch {
+    // Leaving the previous answer up would be worse than none: it would be
+    // about a sheet the user has since changed.
+    scaleAdvice.value = null;
+    scaleAdviceError.value = true;
+  }
+};
+
+watch(
+  () => [
+    props.planId,
+    local.embellishment.page_size,
+    local.embellishment.page_orientation,
+    local.embellishment.show_bearing_distance_table,
+    local.embellishment.show_coordinate_table,
+  ],
+  () => refreshScaleAdvice(),
+  { immediate: true }
+);
+
+// A plan saved at 1:1500, or at any scale since dropped from the list, keeps
+// its value rather than silently reading as blank.
+const hasCustomScale = computed(() => {
+  const scale = Number(local.embellishment.scale);
+  return (
+    Number.isFinite(scale) &&
+    scale > 0 &&
+    !(PLAN_SCALES as readonly number[]).includes(scale)
+  );
+});
 
 // A plan saved before the dropdown existed may hold a state name we don't list.
 const hasCustomState = computed(() => {

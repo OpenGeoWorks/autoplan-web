@@ -128,11 +128,14 @@
                   col.type === 'text' ? 'w-16' : 'w-28',
                   'px-2 py-1 text-xs rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:outline-none',
                 ]"
+                :readonly="uploaded"
+                :disabled="uploaded"
                 @input="setCell(row, col, ($event.target as HTMLInputElement).value)"
               />
             </td>
             <td class="px-3 py-1 text-right">
               <button
+                v-if="!uploaded"
                 @click="removeRow(idx)"
                 class="text-red-600 hover:text-red-700 text-xs"
               >
@@ -152,13 +155,40 @@
       </table>
     </div>
     <div class="mt-2 text-[11px] text-gray-600 dark:text-gray-300">
-      <template v-if="totalCount > displayCount">
+      <template v-if="uploaded">
+        Showing the first
+        <strong>{{ local.coordinates.length.toLocaleString() }}</strong> of
+        <strong>{{ storedPointCount.toLocaleString() }}</strong> points from
+        <strong>{{ uploadedFileName || "your file" }}</strong
+        >. Upload another file to change them.
+      </template>
+      <template v-else-if="totalCount > displayCount">
         Showing first {{ displayCount }} of {{ totalCount }} rows
       </template>
       <template v-else> Showing {{ totalCount }} rows </template>
     </div>
 
-    <div class="flex gap-3">
+    <!--
+      Removing an uploaded survey is the only way back to a table the user can
+      type in, since uploaded coordinates are not editable row by row. It is
+      destructive and confirmed, because the points it discards are not in the
+      browser to be undone.
+    -->
+    <div v-if="uploaded" class="flex gap-3">
+      <button
+        type="button"
+        :disabled="removingUpload"
+        @click="onRemoveUpload"
+        class="px-3 py-1.5 text-xs rounded border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed dark:border-red-700 dark:text-red-300 dark:hover:bg-red-900/30"
+      >
+        {{ removingUpload ? "Removing…" : "Remove uploaded coordinates" }}
+      </button>
+      <p class="self-center text-[11px] text-gray-500 dark:text-gray-400">
+        Discards the survey and lets you enter coordinates by hand.
+      </p>
+    </div>
+
+    <div v-if="!uploaded" class="flex gap-3">
       <button
         @click="addRow"
         type="button"
@@ -175,12 +205,12 @@
         Clear All
       </button>
     </div>
-    <p class="text-[11px] text-gray-500 dark:text-gray-400">
+    <p v-if="!uploaded" class="text-[11px] text-gray-500 dark:text-gray-400">
       Add at least one topo point to proceed.
     </p>
     <div class="mt-3">
       <button
-        v-if="totalCount > displayCount"
+        v-if="!uploaded && totalCount > displayCount"
         @click="loadMore"
         type="button"
         class="px-3 py-1.5 text-xs rounded bg-blue-600 text-white hover:bg-blue-700"
@@ -190,6 +220,12 @@
     </div>
 
     <!-- Column mapping modal (shown after a file upload) -->
+    <UploadProgressOverlay
+      :show="uploading"
+      :label="uploadLabel"
+      :percent="uploadPercent"
+    />
+
     <CoordinateColumnMapper
       v-model="showMapper"
       :rows="rawRows"
@@ -202,14 +238,58 @@
 
 <script setup lang="ts">
 import { reactive, watch, ref, nextTick, computed } from "vue";
-const props = defineProps<{ modelValue: { coordinates: any[] } }>();
-const emit = defineEmits(["update:modelValue"]);
+import { useRoute } from "vue-router";
+const props = defineProps<{
+  modelValue: { coordinates: any[] };
+  /** Survey points held in the point store; the table shows a preview. */
+  pointCount?: number;
+  /**
+   * Set when the coordinates came from a file. The file is then the record of
+   * the survey and this table is a preview of it, so the rows are not
+   * editable -- changing them means uploading a different file.
+   */
+  pointSource?: { file_name?: string; uploaded_at?: string } | null;
+}>();
+const emit = defineEmits(["update:modelValue", "update:pointSource"]);
 const local = reactive<{ coordinates: any[] }>({ coordinates: [] });
 // Flag to avoid echoing updates back to parent when applying incoming prop changes
 const syncing = ref(false);
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const loading = ref(false);
+const route = useRoute();
+const planId = computed(() => route.params.plan as string);
+const toast = useToast();
+
+// A large survey lives in the point store; the table holds a preview of it.
+const storedPointCount = ref(props.pointCount ?? 0);
+watch(
+  () => props.pointCount,
+  (value) => {
+    if (!serverBacked.value) storedPointCount.value = value ?? 0;
+  },
+);
+const uploading = ref(false);
+const uploadPercent = ref(0);
+const uploadLabel = ref("");
+/** The file waiting on a column mapping; null when the rows are already here
+ *  (an Excel sheet), set when only a preview of them is. */
+const pendingFile = ref<File | null>(null);
+/** True when the survey lives in the point store rather than in this table,
+ *  which is what decides whether a column change is re-read on the server. */
+const serverBacked = ref(false);
+
+/**
+ * Whether these coordinates came from a file.
+ *
+ * True either because one was just uploaded, or because the plan was loaded
+ * and says so -- the table has to be read-only on a revisit too, not only in
+ * the session that did the uploading.
+ */
+const uploaded = computed(
+  () => serverBacked.value || Boolean(props.pointSource?.uploaded_at),
+);
+const uploadedFileName = computed(() => props.pointSource?.file_name ?? "");
 const showMapper = ref(false);
 const rawRows = ref<string[][]>([]);
 const MAX_DISPLAY = 100;
@@ -302,7 +382,14 @@ function triggerFile() {
 // lives in the column mapper (utils/columnMapping.ts).
 
 import { parseTable } from "~/composables/useSheetParser";
+import {
+  previewColumns,
+  uploadCoordinateFile,
+  remapColumns,
+  clearUploadedCoordinates,
+} from "~/composables/useCoordinateUpload";
 import CoordinateColumnMapper from "~/components/CoordinateColumnMapper.vue";
+import UploadProgressOverlay from "~/components/UploadProgressOverlay.vue";
 import {
   ID_FIELD,
   NORTHING_FIELD,
@@ -353,36 +440,154 @@ async function onFile(ev: Event) {
   if (!file) return;
 
   const ext = "." + (file.name.split(".").pop() || "").toLowerCase();
+  if (fileInputRef.value) fileInputRef.value.value = "";
 
-  const openMapper = (rows: string[][]) => {
-    if (fileInputRef.value) fileInputRef.value.value = "";
-    loading.value = false;
-    if (!rows || !rows.length) return;
-    rawRows.value = rows;
-    showMapper.value = true;
-  };
-
-  try {
+  // Excel is a zip of XML and cannot be streamed, so it is still inflated
+  // here — but those files are small by nature. A delimited survey is not:
+  // reading a 58 MB CSV in the tab and turning it into a million row arrays
+  // is what took the browser down, so it never happens now.
+  if (ext === ".xls" || ext === ".xlsx") {
     loading.value = true;
     const reader = new FileReader();
     reader.onload = async () => {
-      const rows =
-        ext === ".xls" || ext === ".xlsx"
-          ? await parseTable(reader.result as ArrayBuffer)
-          : await parseTable(String(reader.result || ""));
-      openMapper(rows as string[][]);
+      try {
+        const rows = (await parseTable(reader.result as ArrayBuffer)) as string[][];
+        pendingFile.value = null;
+        if (rows?.length) {
+          rawRows.value = rows;
+          showMapper.value = true;
+        }
+      } finally {
+        loading.value = false;
+      }
     };
-    if (ext === ".xls" || ext === ".xlsx") reader.readAsArrayBuffer(file);
-    else reader.readAsText(file);
-  } catch (err) {
-    console.error("File import error:", err);
-    if (fileInputRef.value) fileInputRef.value.value = "";
-    loading.value = false;
+    reader.readAsArrayBuffer(file);
+    return;
+  }
+
+  uploading.value = true;
+  uploadPercent.value = 0;
+  uploadLabel.value = "Reading the first few rows…";
+  try {
+    // The head of the file goes up; a sample of rows comes back. Enough to
+    // show which column is which, and nothing more.
+    const preview = await previewColumns(file);
+    pendingFile.value = file;
+    rawRows.value = preview.hasHeader
+      ? [preview.headers, ...preview.sampleRows]
+      : preview.sampleRows;
+    showMapper.value = true;
+  } catch (err: any) {
+    toast.add({
+      title: "Could not read that file",
+      description: err?.response?.data?.message || err?.message,
+      color: "error",
+    });
+  } finally {
+    uploading.value = false;
+    uploadLabel.value = "";
   }
 }
 
+/** Put a preview from the server into the table. */
+function showPreview(outcome: {
+  preview: any[];
+  pointCount: number;
+  skipped: number;
+  pointSource?: any;
+}) {
+  serverBacked.value = true;
+  storedPointCount.value = outcome.pointCount;
+  // Tell the page straight away. It otherwise only learns this when the plan
+  // is loaded, so a survey uploaded and saved in one sitting still looked
+  // typed -- and Save & Continue posted the preview to the edit endpoint.
+  emit("update:pointSource", outcome.pointSource ?? null);
+  local.coordinates = outcome.preview.map((c: any) => ({
+    _key: crypto.randomUUID(),
+    point: String(c.id ?? ""),
+    northing: c.northing ?? null,
+    easting: c.easting ?? null,
+    elevation: c.elevation ?? null,
+  }));
+  displayCount.value = Math.min(MAX_DISPLAY, local.coordinates.length);
+  emit("update:modelValue", { coordinates: [...local.coordinates] });
+
+  toast.add({
+    title: `Imported ${outcome.pointCount.toLocaleString()} point${
+      outcome.pointCount === 1 ? "" : "s"
+    }`,
+    description:
+      (outcome.pointCount > local.coordinates.length
+        ? `Showing the first ${local.coordinates.length} in the table. `
+        : "") +
+      (outcome.skipped
+        ? `${outcome.skipped} row(s) could not be read and were skipped.`
+        : ""),
+    color: "success",
+  });
+}
+
 // Called when the user confirms the column mapping.
-function onMappingConfirmed(mapped: MappedRow[]) {
+//
+// For a delimited file the rows never came here: the dialog worked from a
+// sample, and what it produces is a set of column indices. Those go to the
+// server, which re-reads the file it still has — so a survey of any size can
+// be rearranged without a coordinate crossing the wire.
+async function onMappingConfirmed(
+  mapped: MappedRow[],
+  columns: { mapping: Record<string, number | null>; hasHeader: boolean },
+) {
+  const file = pendingFile.value;
+  pendingFile.value = null;
+
+  if (file) {
+    uploading.value = true;
+    uploadPercent.value = 0;
+    uploadLabel.value = "Uploading the file…";
+    try {
+      showPreview(
+        await uploadCoordinateFile(planId.value, file, {
+          mapping: columns.mapping,
+          kind: "coordinates",
+          // The dialog names its id field after the table column it fills.
+          idKey: "point",
+          onProgress: (p) => {
+            uploadPercent.value = p.phase === "sending" ? p.percent : 0;
+            uploadLabel.value = p.label;
+          },
+        }),
+      );
+    } catch (err: any) {
+      toast.add({
+        title: "Could not import that file",
+        description: err?.response?.data?.message || err?.message,
+        color: "error",
+      });
+    } finally {
+      uploading.value = false;
+      uploadLabel.value = "";
+      uploadPercent.value = 0;
+    }
+    return;
+  }
+
+  // Already uploaded, and the user has changed their mind about the columns:
+  // the server re-reads its copy. Tested on where the data came from, not on
+  // whether rows arrived -- the dialog always returns its sample rows mapped,
+  // so counting them would send a 1.5-million-point survey back to 25.
+  if (serverBacked.value) {
+    uploading.value = true;
+    uploadLabel.value = "Re-reading the survey with the new columns…";
+    try {
+      showPreview(await remapColumns(planId.value, columns.mapping, "coordinates", "point"));
+    } finally {
+      uploading.value = false;
+      uploadLabel.value = "";
+    }
+    return;
+  }
+
+  // An Excel sheet: its rows really are here.
   const parsed = mapped.map((m) => ({
     _key: crypto.randomUUID(),
     point: String(m.point ?? ""),
@@ -391,7 +596,9 @@ function onMappingConfirmed(mapped: MappedRow[]) {
     elevation: m.elevation as number | null,
   }));
   if (parsed.length) {
+    serverBacked.value = false;
     local.coordinates = parsed;
+    storedPointCount.value = parsed.length;
     displayCount.value = Math.min(MAX_DISPLAY, parsed.length);
     emit("update:modelValue", { coordinates: [...local.coordinates] });
   }
@@ -413,4 +620,49 @@ function downloadTemplate() {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+const removingUpload = ref(false);
+
+/**
+ * Discard the uploaded survey and go back to an empty, typeable table.
+ *
+ * Confirmed first: the points are in the point store, not here, so there is
+ * nothing to undo it with.
+ */
+async function onRemoveUpload() {
+  const total = storedPointCount.value.toLocaleString();
+  if (
+    !window.confirm(
+      `Remove the ${total} uploaded coordinates from this plan?\n\n` +
+        "The survey will be discarded and you can enter coordinates by hand. " +
+        "This cannot be undone.",
+    )
+  ) {
+    return;
+  }
+
+  removingUpload.value = true;
+  try {
+    await clearUploadedCoordinates(planId.value);
+    serverBacked.value = false;
+    // The page holds the plan's point_source and decides from it whether to
+    // save this table. Left stale it would keep the table locked and keep
+    // skipping the save.
+    emit("update:pointSource", null);
+    storedPointCount.value = 0;
+    local.coordinates = [];
+    displayCount.value = 0;
+    emit("update:modelValue", { coordinates: [] });
+    toast.add({ title: "Uploaded coordinates removed", color: "success" });
+  } catch (err: any) {
+    toast.add({
+      title: "Could not remove the uploaded coordinates",
+      description: err?.response?.data?.message || err?.message,
+      color: "error",
+    });
+  } finally {
+    removingUpload.value = false;
+  }
+}
+
 </script>

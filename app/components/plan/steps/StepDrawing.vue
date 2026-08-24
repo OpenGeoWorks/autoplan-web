@@ -13,6 +13,19 @@
       <span>{{ props.notice }}</span>
     </div>
 
+    <!--
+      The map is drawing a preview, not the survey. Said plainly and next to
+      it, because the shape of a few hundred points looks like coverage and
+      would otherwise be read as one.
+    -->
+    <div
+      v-if="previewNotice"
+      class="flex items-start gap-2 rounded-md border border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 px-4 py-3 text-sm text-blue-800 dark:text-blue-200"
+    >
+      <RiInformationLine class="w-4 h-4 mt-0.5 shrink-0" />
+      <span>{{ previewNotice }}</span>
+    </div>
+
     <!-- Leaflet map with base-layer switch (auto: WebMercator tiles if geographic, else CRS.Simple) -->
     <div
       class="rounded-md overflow-hidden border border-gray-200 dark:border-slate-600"
@@ -260,6 +273,15 @@ const props = withDefaults(defineProps<{
   // Layout road centerlines; ids reference the corner register passed via
   // `coordinates`.
   roads?: Array<{ name?: string; width?: number | null; ids?: string[] }>;
+  /**
+   * Survey points held in the point store.
+   *
+   * An uploaded survey lives outside the plan document and only its first few
+   * hundred points are carried with it, so this map is drawing a preview. The
+   * count is needed to say so -- a map that silently shows 200 of 1.5 million
+   * points invites conclusions about coverage that are not true.
+   */
+  pointCount?: number;
   // Visibility switches (topographic settings); undefined means visible.
   showBoundary?: boolean;
   showSpotHeights?: boolean;
@@ -436,6 +458,27 @@ const boundaryPoints = computed(() => {
     points.pop();
   }
   return points;
+});
+
+/**
+ * What to say when the map is showing part of a survey.
+ *
+ * Only when there is genuinely more stored than is being drawn -- a plan whose
+ * points are all here needs no caveat, and a notice that is always present is
+ * one nobody reads.
+ */
+const previewNotice = computed(() => {
+  // Counted from the rows the map was given rather than from the spot heights
+  // it happens to draw, so the caveat holds when they are switched off in the
+  // topo settings, and on the other plan types that draw the same series.
+  const shown = filledRows(props.coordinates).length;
+  const stored = props.pointCount ?? 0;
+  if (!shown || stored <= shown) return "";
+  return (
+    `Preview only: showing the first ${shown.toLocaleString()} of ` +
+    `${stored.toLocaleString()} survey points. The plan is drawn from the ` +
+    `full survey.`
+  );
 });
 
 // Spot heights (topographic): the coordinates prop carries the topo points

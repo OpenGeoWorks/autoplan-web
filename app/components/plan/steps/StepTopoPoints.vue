@@ -11,7 +11,10 @@
 
   <StepTopoPointsTable
     :model-value="tableModel"
+    :point-count="pointCount"
+    :point-source="pointSource"
     @update:modelValue="onUpdate"
+    @update:pointSource="(v: any) => emit('update:pointSource', v)"
   />
   <div class="flex justify-end mt-6">
     <button
@@ -40,8 +43,18 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  /** Survey points held in the point store; the table shows a preview. */
+  pointCount: {
+    type: Number,
+    default: 0,
+  },
+  /** Set when the coordinates came from a file rather than the table. */
+  pointSource: {
+    type: Object,
+    default: null,
+  },
 });
-const emit = defineEmits(["update:modelValue", "complete"]);
+const emit = defineEmits(["update:modelValue", "complete", "update:pointSource"]);
 const route = useRoute();
 const planId = route.params.plan as string;
 const submitting = ref(false);
@@ -55,9 +68,22 @@ function onUpdate(v: { coordinates: any[] }) {
   emit("update:modelValue", v);
 }
 
+/** True when the survey came from a file and lives in the point store. */
+const uploaded = computed(() => Boolean((props.pointSource as any)?.uploaded_at));
+
 async function onComplete() {
   if (submitting.value) return;
   if (!props.modelValue.coordinates.length) return;
+
+  // An uploaded survey is already stored. The table holds a preview of it, so
+  // there is nothing here to save -- and sending it would be an attempt to
+  // replace the survey with its own first two hundred points, which the
+  // server refuses. Just move on.
+  if (uploaded.value) {
+    emit("complete");
+    return;
+  }
+
   try {
     submitting.value = true;
     const payload = {

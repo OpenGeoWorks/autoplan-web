@@ -93,6 +93,24 @@
             </template>
             <!-- Regular Plan Actions -->
             <template v-else>
+              <!--
+                A plan drawn earlier. Generation takes minutes on a large
+                survey, so a file that already exists is worth offering
+                rather than making someone redraw it to get at it.
+              -->
+              <button
+                v-if="hasGeneratedPlan"
+                type="button"
+                :disabled="downloadingPlan"
+                @click="downloadGeneratedPlan"
+                class="inline-flex items-center px-3 py-2 mr-2 text-sm rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-slate-700 dark:text-gray-300 dark:hover:bg-slate-800"
+              >
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+                </svg>
+                {{ downloadingPlan ? "Preparing…" : "Download plan" }}
+              </button>
               <button
                 @click="generatePlan"
                 :disabled="generationState.loading"
@@ -132,8 +150,19 @@
                     d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                   />
                 </svg>
+                <!--
+                  This button draws the plan; the one beside it downloads the
+                  drawing. Both said "Download Plan", which was survivable
+                  while only one existed and is not now. "Regenerate" only
+                  once there is something to redo -- the first time round
+                  there is nothing to regenerate.
+                -->
                 {{
-                  generationState.loading ? "Generating..." : "Download Plan"
+                  generationState.loading
+                    ? "Generating..."
+                    : hasGeneratedPlan
+                      ? "Regenerate Plan"
+                      : "Generate Plan"
                 }}
               </button>
             </template>
@@ -391,19 +420,33 @@
               <h2
                 class="text-lg font-semibold text-gray-800 dark:text-gray-100"
               >
-                Coordinate Table
+                {{
+                  planData.basic.type === "topographic"
+                    ? "Spot Heights"
+                    : "Coordinate Table"
+                }}
               </h2>
-              <span class="ml-2 text-xs text-gray-500 dark:text-gray-400"
-                >({{ planData.coordinates.length }})</span
-              >
+              <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                <!--
+                  The survey's size, not the table's. They differ for an
+                  uploaded survey, and the smaller number sitting beside an
+                  Export CSV that hands back every point reads as a promise
+                  the export does not keep.
+                -->
+                ({{ coordinateCount.toLocaleString() }}<template
+                  v-if="coordinateCount > planData.coordinates.length"
+                  >, showing {{ planData.coordinates.length }}</template
+                >)
+              </span>
               <div class="ml-auto flex items-center gap-2">
                 <CoordinatePrecisionSelector v-model="coordinatePrecision" />
                 <button
                   @click="exportCoordinates"
-                  class="text-xs px-2 py-1 border rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700"
-                  title="Export coordinates as CSV"
+                  :disabled="exportingCsv"
+                  class="text-xs px-2 py-1 border rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 disabled:opacity-50 dark:hover:bg-slate-700"
+                  title="Download every coordinate on this plan as CSV"
                 >
-                  Export CSV
+                  {{ exportingCsv ? "Preparing…" : "Export CSV" }}
                 </button>
                 <button
                   v-if="planData.coordinates.length > 10"
@@ -453,6 +496,78 @@
             </div>
           </div>
 
+          <!--
+            Boundary. Its own series, uploaded and stored separately from the
+            survey, and it had no table here at all -- a topographic plan
+            showed its spot heights and nothing of its perimeter.
+          -->
+          <div
+            v-if="!isComputationOnly && hasBoundary"
+            class="bg-white dark:bg-slate-800 rounded-lg shadow p-6"
+          >
+            <div class="flex items-center mb-4">
+              <h2
+                class="text-lg font-semibold text-gray-800 dark:text-gray-100"
+              >
+                Boundary
+              </h2>
+              <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                ({{ planData.boundary.length.toLocaleString() }})
+              </span>
+              <div class="ml-auto flex items-center gap-2">
+                <button
+                  @click="exportBoundary"
+                  :disabled="exportingBoundaryCsv"
+                  class="text-xs px-2 py-1 border rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 disabled:opacity-50 dark:hover:bg-slate-700"
+                  title="Download the boundary coordinates as CSV"
+                >
+                  {{ exportingBoundaryCsv ? "Preparing…" : "Export CSV" }}
+                </button>
+                <button
+                  v-if="planData.boundary.length > 10"
+                  @click="showAllBoundary = !showAllBoundary"
+                  class="text-xs px-2 py-1 border rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700"
+                >
+                  {{ showAllBoundary ? "Show Less" : "Show All" }}
+                </button>
+              </div>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="min-w-full text-sm">
+                <thead>
+                  <tr
+                    class="text-left text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-slate-700"
+                  >
+                    <th class="py-2 pr-4">Point ID</th>
+                    <th class="py-2 pr-4">Northing(mN)</th>
+                    <th class="py-2 pr-4">Easting(mE)</th>
+                    <th class="py-2 pr-4">Elevation(m)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="c in visibleBoundary"
+                    :key="c._key"
+                    class="border-b border-gray-100 dark:border-slate-700/60"
+                  >
+                    <td class="py-2 pr-4 text-gray-800 dark:text-gray-100">
+                      {{ c.point || "—" }}
+                    </td>
+                    <td class="py-2 pr-4 text-gray-800 dark:text-gray-100">
+                      {{ formatNumber(c.northing) }}
+                    </td>
+                    <td class="py-2 pr-4 text-gray-800 dark:text-gray-100">
+                      {{ formatNumber(c.easting) }}
+                    </td>
+                    <td class="py-2 pr-4 text-gray-800 dark:text-gray-100">
+                      {{ formatNumber(c.elevation) }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <!-- Parcels -->
           <div
             v-if="!isComputationOnly && planData.parcels.length"
@@ -487,6 +602,51 @@
             </div>
             <div v-else class="text-sm text-gray-500 dark:text-gray-400">
               No parcels added.
+            </div>
+          </div>
+
+          <!--
+            What this plan actually holds, by type. Built from the plan the
+            API returned rather than from the shapes this page maps it into,
+            so a layout plan's plots and a route's alignment are shown here
+            without every field having to be threaded through the page first.
+          -->
+          <div
+            v-if="!isComputationOnly && summarySections.length"
+            class="bg-white dark:bg-slate-800 rounded-lg shadow p-6"
+          >
+            <h2
+              class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4"
+            >
+              {{ planTypeLabel }} Summary
+            </h2>
+            <div class="space-y-5">
+              <div v-for="section in summarySections" :key="section.title">
+                <h3
+                  class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2"
+                >
+                  {{ section.title }}
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                  <div
+                    v-for="(item, idx) in section.items"
+                    :key="section.title + idx"
+                  >
+                    <div class="text-gray-500 dark:text-gray-400">
+                      {{ item.label || "&nbsp;" }}
+                    </div>
+                    <div class="text-gray-800 dark:text-gray-100">
+                      {{ item.value }}
+                    </div>
+                    <div
+                      v-if="item.note"
+                      class="text-[11px] text-gray-500 dark:text-gray-400"
+                    >
+                      {{ item.note }}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -636,73 +796,6 @@
               </div>
             </div>
 
-            <!-- Topographic Settings (inside Embellishment) -->
-            <div
-              v-if="planData.basic.type === 'topographic'"
-              class="mt-4 border-t border-gray-100 dark:border-slate-700 pt-4"
-            >
-              <h3
-                class="text-sm font-medium text-gray-800 dark:text-gray-100 mb-3"
-              >
-                Topographic Settings
-              </h3>
-              <div
-                v-if="topographicSettings"
-                class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm"
-              >
-                <div>
-                  <div class="text-gray-500 dark:text-gray-400">
-                    Show Spot Heights
-                  </div>
-                  <div class="text-gray-800 dark:text-gray-100">
-                    {{ topographicSettings.show_spot_heights ? "Yes" : "No" }}
-                  </div>
-                </div>
-                <div>
-                  <div class="text-gray-500 dark:text-gray-400">
-                    Point Label Scale
-                  </div>
-                  <div class="text-gray-800 dark:text-gray-100">
-                    {{ topographicSettings.point_label_scale ?? "—" }}
-                  </div>
-                </div>
-                <div>
-                  <div class="text-gray-500 dark:text-gray-400">
-                    Show Contours
-                  </div>
-                  <div class="text-gray-800 dark:text-gray-100">
-                    {{ topographicSettings.show_contours ? "Yes" : "No" }}
-                  </div>
-                </div>
-                <div>
-                  <div class="text-gray-500 dark:text-gray-400">
-                    Contour Interval
-                  </div>
-                  <div class="text-gray-800 dark:text-gray-100">
-                    {{ topographicSettings.contour_interval ?? "—" }}
-                  </div>
-                </div>
-                <div>
-                  <div class="text-gray-500 dark:text-gray-400">
-                    Major Contour
-                  </div>
-                  <div class="text-gray-800 dark:text-gray-100">
-                    {{ topographicSettings.major_contour ?? "—" }}
-                  </div>
-                </div>
-                <div>
-                  <div class="text-gray-500 dark:text-gray-400">
-                    Minimum Distance
-                  </div>
-                  <div class="text-gray-800 dark:text-gray-100">
-                    {{ topographicSettings.minimum_distance ?? "—" }}
-                  </div>
-                </div>
-              </div>
-              <div v-else class="text-sm text-gray-500 dark:text-gray-400">
-                No topographic settings available.
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -749,9 +842,14 @@ import { ref, reactive, onMounted, computed, watch } from "vue";
 import { useRoute } from "vue-router";
 import { navigateTo } from "#imports";
 import axios from "axios";
-import { generatePlan as requestPlanGeneration } from "~/composables/usePlanGeneration";
+import {
+  generatePlan as requestPlanGeneration,
+  getPlanDownloadUrl,
+} from "~/composables/usePlanGeneration";
+import { exportCoordinatesCsv } from "~/composables/useCoordinateUpload";
 import { useCoordinatePrecision } from "~/composables/useCoordinatePrecision";
 import { formatPlanOrigin } from "~/utils/planOrigins";
+import { planSummary } from "~/utils/planSummary";
 
 const route = useRoute();
 const toast = useToast();
@@ -764,6 +862,22 @@ const showEditEmbellishmentModal = ref(false);
 const showAllCoordinates = ref(false);
 const { coordinatePrecision, formatCoordinateValue } = useCoordinatePrecision();
 const showConvertModal = ref(false);
+
+/**
+ * The plan exactly as the API returned it.
+ *
+ * Everything below maps it into the shapes the tables and the edit modal
+ * want, and a field not needed by either was simply dropped -- which is why
+ * this page had nothing to say about a layout plan's plots or a route's
+ * alignment. planSummary reads the plan itself instead.
+ */
+const rawPlan = ref<any>(null);
+const summarySections = computed(() => planSummary(rawPlan.value));
+
+const planTypeLabel = computed(() => {
+  const type = String(planData.basic.type || "");
+  return type ? type.charAt(0).toUpperCase() + type.slice(1) : "Plan";
+});
 
 const topographicSettings = ref<any>(null);
 const pageSize = ref<string | null>(null);
@@ -978,6 +1092,16 @@ const computationView = computed(() => {
 
 const planData = reactive({
   basic: { name: "", type: "" },
+  /** The last plan drawn for this record, if it has been generated before. */
+  generated: null as { key?: string; generated_at?: string } | null,
+  /** Points held in the point store; the table shows a preview of them. */
+  pointCount: 0,
+  /**
+   * The plan's perimeter: the topographic boundary or the layout site
+   * boundary. A separate series from the survey, uploaded separately and
+   * stored separately, and it had no table on this page at all.
+   */
+  boundary: [] as any[],
   coordinates: [] as any[],
   parcels: [] as any[],
   drawing: { file: null as File | null, fileName: "" },
@@ -1026,12 +1150,17 @@ async function fetchPlanData() {
     const res = await axios.get(`/plan/fetch/${planId}`);
     const data = res?.data?.data;
     if (data) {
+      rawPlan.value = data;
       // Check if computation only
       isComputationOnly.value = data.computation_only === true;
 
       // Basic
       planData.basic.name = data.name || "";
       planData.basic.type = data.type || "";
+      planData.generated = data.generated ?? null;
+      // The survey's real size. The table below holds a preview of it,
+      // so this is what the count and the export are measured against.
+      planData.pointCount = data.point_count ?? 0;
 
       // If computation only, determine the computation type and store data
       if (isComputationOnly.value) {
@@ -1060,6 +1189,20 @@ async function fetchPlanData() {
           elevation: c.elevation ?? null,
         }));
       }
+
+      // Boundary. Topographic plans carry it as topographic_boundary and
+      // layout plans as layout_boundary; a plan has at most one.
+      const boundary =
+        data.topographic_boundary?.coordinates ??
+        data.layout_boundary?.coordinates ??
+        [];
+      planData.boundary = boundary.map((c: any) => ({
+        _key: crypto.randomUUID(),
+        point: c.id ?? "",
+        northing: c.northing ?? null,
+        easting: c.easting ?? null,
+        elevation: c.elevation ?? null,
+      }));
 
       // Parcels
       if (Array.isArray(data.parcels)) {
@@ -1127,32 +1270,83 @@ const visibleCoordinates = computed(() => {
   return planData.coordinates.slice(0, 10);
 });
 
-function exportCoordinates() {
-  if (!planData.coordinates || !planData.coordinates.length) {
-    toast?.add?.({ title: "No coordinates to export", color: "warning" });
-    return;
-  }
+const showAllBoundary = ref(false);
+const visibleBoundary = computed(() =>
+  showAllBoundary.value ? planData.boundary : planData.boundary.slice(0, 10),
+);
 
-  const rows = planData.coordinates.map((c: any) => {
-    return [
-      c.point ?? "",
-      c.northing ?? "",
-      c.easting ?? "",
-      c.elevation ?? "",
-    ].join(",");
-  });
-  const header = ["id", "northing", "easting", "elevation"].join(",");
-  const csv = [header, ...rows].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `coordinates_${planData.basic.name || planId}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  toast?.add?.({ title: "Coordinates exported", color: "success" });
+/** Boundaries are a handful of corners, so the table is the whole series. */
+const hasBoundary = computed(() => planData.boundary.length > 0);
+
+const exportingBoundaryCsv = ref(false);
+
+/** Download the perimeter. A different series from the survey, so a different
+ *  request -- the same endpoint asked for the other kind. */
+async function exportBoundary() {
+  if (exportingBoundaryCsv.value) return;
+  exportingBoundaryCsv.value = true;
+  try {
+    const { blob, fileName } = await exportCoordinatesCsv(planId, "boundary");
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName.replace(/\.csv$/, "_boundary.csv");
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast?.add?.({ title: "Boundary exported", color: "success" });
+  } catch (error: any) {
+    toast?.add?.({
+      title: "Could not export the boundary",
+      description:
+        error?.response?.data?.message || error?.message || "Please try again.",
+      color: "error",
+    });
+  } finally {
+    exportingBoundaryCsv.value = false;
+  }
+}
+
+/** How many points the plan holds: the stored survey, or the table when it is
+ *  all there is. */
+const coordinateCount = computed(
+  () => planData.pointCount || planData.coordinates.length,
+);
+
+const exportingCsv = ref(false);
+
+/**
+ * Download the plan's coordinates.
+ *
+ * Asked of the server rather than built from `planData.coordinates`: that is a
+ * preview of an uploaded survey, so exporting it handed back two hundred
+ * points of however many were surveyed.
+ */
+async function exportCoordinates() {
+  if (exportingCsv.value) return;
+  exportingCsv.value = true;
+  try {
+    const { blob, fileName } = await exportCoordinatesCsv(planId);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast?.add?.({ title: "Coordinates exported", color: "success" });
+  } catch (error: any) {
+    toast?.add?.({
+      title: "Could not export the coordinates",
+      description:
+        error?.response?.data?.message || error?.message || "Please try again.",
+      color: "error",
+    });
+  } finally {
+    exportingCsv.value = false;
+  }
 }
 
 // Display-only: never groups thousands and honours the user's precision
@@ -1226,6 +1420,43 @@ async function handleConvertToPlan(planType: string) {
     });
   } finally {
     conversionState.loading = false;
+  }
+}
+
+/** Whether there is a drawing to download at all. */
+const hasGeneratedPlan = computed(
+  () => Boolean(generationState.url || planData.generated?.key),
+);
+
+const downloadingPlan = ref(false);
+
+/**
+ * Fetch a fresh link and save the file.
+ *
+ * The link is signed and short-lived, so it is asked for at the moment of the
+ * click rather than held in the page -- one kept around would either have
+ * expired or, worse, still be live.
+ */
+async function downloadGeneratedPlan() {
+  if (downloadingPlan.value) return;
+  downloadingPlan.value = true;
+  try {
+    const url = await getPlanDownloadUrl(planId);
+    const link = document.createElement("a");
+    link.href = url;
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch (error: any) {
+    toast?.add?.({
+      title: "Could not download the plan",
+      description:
+        error?.response?.data?.message || error?.message || "Please try again.",
+      color: "error",
+    });
+  } finally {
+    downloadingPlan.value = false;
   }
 }
 
@@ -1305,6 +1536,7 @@ async function refreshPlanData() {
     const res = await axios.get(`/plan/fetch/${planId}`);
     const data = res?.data?.data;
     if (data) {
+      rawPlan.value = data;
       // Update embellishment fields
       const emb: any = data;
       if (emb) {

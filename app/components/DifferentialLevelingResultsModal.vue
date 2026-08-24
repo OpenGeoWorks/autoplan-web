@@ -144,7 +144,7 @@
                 <td v-if="method === 'height-of-instrument'" class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ fmt(s.height_of_instrument) }}</td>
                 <td v-else class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ fmt(s.rise) }}</td>
                 <td v-if="method === 'rise-and-fall'" class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ fmt(s.fall) }}</td>
-                <td v-if="misclosureCorrection" class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ fmt(s.uncorrected_reduced_level) }}</td>
+                <td v-if="misclosureCorrection" class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ uncorrectedRL(s, index) }}</td>
                 <td v-if="misclosureCorrection" class="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-slate-600">{{ fmt(s.correction) }}</td>
                 <td
                   class="px-3 py-2 text-right font-mono font-semibold"
@@ -224,6 +224,11 @@ const fmt = (v: number | undefined | null): string => {
 
 const stations = computed(() => props.results?.stations ?? []);
 
+// The first station starts from the known reduced level, so its uncorrected
+// level is that same value — leave the cell blank rather than repeating it.
+const uncorrectedRL = (s: Station, index: number): string =>
+  index === 0 ? "" : fmt(s.uncorrected_reduced_level);
+
 // The misclosure is only "corrected" when a non-zero correction was distributed
 // across the stations, shifting the reduced levels away from their raw values.
 const misclosureCorrected = computed(() =>
@@ -281,7 +286,7 @@ const exportToCSV = () => {
   }
   headers.push("Reduced Level(m)");
 
-  const rows = list.map((s) => {
+  const rows = list.map((s, index) => {
     const cols = [s.stn, fmt(s.back_sight), fmt(s.intermediate_sight), fmt(s.fore_sight)];
     if (props.method === "height-of-instrument") {
       cols.push(fmt(s.height_of_instrument));
@@ -289,7 +294,7 @@ const exportToCSV = () => {
       cols.push(fmt(s.rise), fmt(s.fall));
     }
     if (props.misclosureCorrection) {
-      cols.push(fmt(s.uncorrected_reduced_level), fmt(s.correction));
+      cols.push(uncorrectedRL(s, index), fmt(s.correction));
     }
     cols.push(fmt(s.reduced_level));
     return cols.join(",");

@@ -222,8 +222,20 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "update:modelValue", v: boolean): void;
-  /** The re-derived rows, keyed by field. Column layout is the caller's. */
-  (e: "confirm", rows: MappedRow[]): void;
+  /**
+   * The mapped rows, and the column choices that produced them.
+   *
+   * ``columns`` is a second argument rather than part of the first so that
+   * every existing consumer -- which only ever wanted the rows -- keeps
+   * working untouched. It matters when the file is being parsed on the
+   * server: only a preview of it reaches the browser, so ``rows`` is a
+   * sample and the indices are what get applied to the whole file.
+   */
+  (
+    e: "confirm",
+    rows: MappedRow[],
+    columns: { mapping: ColumnMapping; hasHeader: boolean },
+  ): void;
   /** New column order after a slot was dragged onto another slot. */
   (e: "reorder", order: FieldDef[]): void;
   (e: "cancel"): void;
@@ -383,7 +395,10 @@ function previewCell(row: MappedRow, key: FieldKey): string {
 function onConfirm() {
   if (missingRequired.value.length || previewTotal.value === 0) return;
   saveSessionMapping(mappingSignature(detected.value, props.fields), mapping.value);
-  emit("confirm", mappedRows.value);
+  emit("confirm", mappedRows.value, {
+    mapping: { ...mapping.value },
+    hasHeader: hasHeader.value,
+  });
   emit("update:modelValue", false);
 }
 

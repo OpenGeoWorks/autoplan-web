@@ -81,7 +81,8 @@
         <template v-if="planData.basic.type === 'topographic'">
           <!-- Step 1: Topo Boundary Table -->
           <StepCoordinates
-            :point-count="planData.pointCount"
+            kind="boundary"
+            :point-count="planData.boundary.length"
             v-if="currentStep === 1"
             :model-value="boundaryModel"
             :plan-type="planData.basic.type"
@@ -93,6 +94,9 @@
           <StepTopoPoints
             v-else-if="currentStep === 2"
             :model-value="topoPointsModel"
+            :point-count="planData.pointCount"
+            :point-source="planData.pointSource"
+            @update:pointSource="(v: any) => (planData.pointSource = v)"
             :loading="submittingCoordinates"
             @update:modelValue="(v) => (planData.topoPoints = v.coordinates)"
             @complete="onTopoPointsSaved"
@@ -109,6 +113,7 @@
           <StepDrawing
             v-else-if="currentStep === 4"
             :coordinates="planData.topoPoints"
+            :point-count="planData.pointCount"
             :boundary="planData.boundary"
             :show-boundary="planData.topoSettings.show_boundary !== false"
             :show-spot-heights="planData.topoSettings.show_spot_heights !== false"
@@ -117,6 +122,7 @@
           />
           <!-- Step 5: Embellishment -->
           <StepEmbellishment
+            :plan-id="planId"
             :plan-type="planData.basic.type"
             v-else-if="currentStep === 5"
             :model-value="embellishmentModel"
@@ -127,13 +133,13 @@
           />
           <!-- Step 6: Report -->
           <StepReport
+            :plan="rawPlan"
             v-else-if="currentStep === 6"
+            :generated="planData.generated"
             :model-value="reportModel"
             :basic="planData.basic"
             :coordinates-count="(planData.topoPoints || []).length"
             :parcels-count="0"
-            :topo-settings="planData.topoSettings"
-            :topo-boundary="planData.boundary"
             @update:model-value="onReportUpdate"
             @cancel="navigateTo(`/project/${projectId}`)"
             @finish="finishPlan"
@@ -155,6 +161,9 @@
           <StepRouteAlignment
             v-else-if="currentStep === 2"
             :model-value="alignmentModel"
+            :point-count="planData.pointCount"
+            :point-source="planData.pointSource"
+            @update:point-source="(v: any) => (planData.pointSource = v)"
             :elevation-ids="
               planData.elevations.map((e) => e.point).filter(Boolean)
             "
@@ -165,6 +174,7 @@
           <StepDrawing
             v-else-if="currentStep === 3"
             :coordinates="planData.coordinates"
+            :point-count="planData.pointCount"
             :parcel-name="planData.basic.name || 'Route'"
             plan-type="route"
             :right-of-way-width="planData.routeParams.right_of_way_width"
@@ -181,6 +191,7 @@
           />
           <!-- Route Step 5: Embellishment -->
           <StepEmbellishment
+            :plan-id="planId"
             :plan-type="planData.basic.type"
             v-else-if="currentStep === 5"
             :model-value="embellishmentModel"
@@ -191,12 +202,13 @@
           />
           <!-- Route Step 6: Report -->
           <StepReport
+            :plan="rawPlan"
             v-else-if="currentStep === 6"
+            :generated="planData.generated"
             :model-value="reportModel"
             :basic="planData.basic"
             :coordinates-count="planData.elevations.length"
             :parcels-count="0"
-            :longitudinal-params="planData.longitudinal"
             @update:model-value="onReportUpdate"
             @cancel="navigateTo(`/project/${projectId}`)"
             @finish="finishPlan"
@@ -206,7 +218,8 @@
         <template v-else-if="planData.basic.type === 'layout'">
           <!-- Layout Step 1: Site Boundary -->
           <StepCoordinates
-            :point-count="planData.pointCount"
+            kind="boundary"
+            :point-count="planData.boundary.length"
             v-if="currentStep === 1"
             :model-value="boundaryModel"
             :loading="submittingCoordinates"
@@ -233,6 +246,7 @@
           />
           <!-- Layout Step 4: Embellishment -->
           <StepEmbellishment
+            :plan-id="planId"
             :plan-type="planData.basic.type"
             v-else-if="currentStep === 4"
             :model-value="embellishmentModel"
@@ -243,12 +257,13 @@
           />
           <!-- Layout Step 5: Report -->
           <StepReport
+            :plan="rawPlan"
             v-else-if="currentStep === 5"
+            :generated="planData.generated"
             :model-value="reportModel"
             :basic="planData.basic"
             :coordinates-count="planData.boundary.length"
             :parcels-count="planData.layoutDesign.plots.length"
-            :layout-params="planData.layoutDesign"
             @update:model-value="onReportUpdate"
             @cancel="navigateTo(`/project/${projectId}`)"
             @finish="finishPlan"
@@ -259,6 +274,8 @@
           <!-- Step 1: Coordinates -->
           <StepCoordinates
             :point-count="planData.pointCount"
+            :point-source="planData.pointSource"
+            @update:pointSource="(v: any) => (planData.pointSource = v)"
             v-if="currentStep === 1"
             :model-value="coordinatesModel"
             :loading="submittingCoordinates"
@@ -289,6 +306,7 @@
             v-else-if="currentStep === 4"
             :model-value="drawingModel"
             :coordinates="planData.coordinates"
+            :point-count="planData.pointCount"
             :parcel-name="planData.parcels[0]?.name || planData.basic.name"
             :parcels="planData.parcels"
             :plan-type="planData.basic.type"
@@ -298,6 +316,7 @@
           />
           <!-- Step 5: Embellishment -->
           <StepEmbellishment
+            :plan-id="planId"
             :plan-type="planData.basic.type"
             v-else-if="currentStep === 5"
             :model-value="embellishmentModel"
@@ -308,7 +327,9 @@
           />
           <!-- Step 6: Report -->
           <StepReport
+            :plan="rawPlan"
             v-else-if="currentStep === 6"
+            :generated="planData.generated"
             :model-value="reportModel"
             :basic="planData.basic"
             :coordinates-count="planData.coordinates.length"
@@ -350,6 +371,13 @@ const toast = useToast();
 
 const projectId = route.params.id as string;
 const planId = route.params.plan as string;
+
+/**
+ * The plan exactly as the API returned it, kept for the report step's type
+ * summary. Everything else on this page works from the mapped `planData`,
+ * which drops any field the form does not edit.
+ */
+const rawPlan = ref<any>(null);
 const submittingCoordinates = ref(false);
 const submittingParcels = ref(false);
 const submittingElevation = ref(false);
@@ -456,6 +484,8 @@ const planData = reactive({
   report: { generate: true },
   // Survey points held in the point store; the coordinate table previews them.
   pointCount: 0,
+  pointSource: null as any,
+  generated: null as any,
   // Topographic plan fields
   boundary: [] as any[],
   topoPoints: [] as any[],
@@ -530,6 +560,7 @@ const fetchPlan = async (skipNavigation = false) => {
     const res = await axios.get(`/plan/fetch/${planId}`);
     const data = res?.data?.data;
     if (data) {
+      rawPlan.value = data;
       // Basic
       planData.basic.name = data.name || "";
       planData.basic.type = data.type || "";
@@ -647,6 +678,12 @@ const fetchPlan = async (skipNavigation = false) => {
       }
 
       planData.pointCount = data.point_count ?? 0;
+      // Tells the coordinate steps that the survey came from a file,
+      // so the table is a preview of it rather than the thing itself.
+      planData.pointSource = data.point_source ?? null;
+      // The last plan drawn for this record, so the report step can
+      // offer the file instead of only the button that redraws it.
+      planData.generated = data.generated ?? null;
 
       // Embellishment prefill: API returns these fields flattened in the plan object
       const emb: any = data;
@@ -863,6 +900,16 @@ async function completeCoordinates() {
   if (!planData.coordinates.length) return;
   try {
     submittingCoordinates.value = true;
+    // An uploaded survey is already stored, and this table only holds a
+    // preview of it. Saving that back would ask the server to replace the
+    // survey with its own first two hundred points, which it refuses -- so
+    // there is nothing to save here, only somewhere to go next.
+    if (planData.pointSource?.uploaded_at) {
+      markCompleted(1);
+      currentStep.value = 2;
+      return;
+    }
+
     const payload = {
       coordinates: planData.coordinates.map((r: any) => ({
         id: r.point,
