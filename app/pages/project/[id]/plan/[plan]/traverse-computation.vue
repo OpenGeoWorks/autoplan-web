@@ -55,17 +55,7 @@
                 <th
                   v-for="col in tableColumns"
                   :key="col.key"
-                  draggable="true"
-                  :title="`Drag to move the ${col.label} column`"
-                  class="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300 cursor-grab active:cursor-grabbing select-none"
-                  :class="[
-                    dragKey === col.key ? 'opacity-40' : '',
-                    overKey === col.key ? 'bg-blue-100 dark:bg-blue-900/40' : '',
-                  ]"
-                  @dragstart="onHeaderDragStart(col.key)"
-                  @dragover.prevent="onHeaderDragOver(col.key)"
-                  @drop.prevent="onHeaderDrop(col.key)"
-                  @dragend="onHeaderDragEnd"
+                  class="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300"
                 >
                   {{ col.label }}
                 </th>
@@ -441,28 +431,15 @@ import {
   EASTING_FIELD,
   type FieldDef,
 } from "~/utils/columnMapping";
-import { useColumnOrder, applyStoredOrder } from "~/composables/useColumnOrder";
 
-// Column order of the known-coordinates table. Northing-first and
-// easting-first are both common; the choice is remembered per surveyor.
+// Columns of the known-coordinates table.
 const MAPPER_FIELDS: FieldDef[] = [
   { ...ID_FIELD, key: "id", label: "Point ID", placeholder: "KG|21" },
   { ...NORTHING_FIELD, label: "Northing(mN)", placeholder: "860071.644" },
   { ...EASTING_FIELD, label: "Easting(mE)", placeholder: "622885.055" },
 ];
 
-const tableColumns = ref<FieldDef[]>(
-  applyStoredOrder("traverse-coords", MAPPER_FIELDS),
-);
-
-const {
-  dragKey,
-  overKey,
-  onHeaderDragStart,
-  onHeaderDragOver,
-  onHeaderDrop,
-  onHeaderDragEnd,
-} = useColumnOrder("traverse-coords", tableColumns);
+const tableColumns: FieldDef[] = MAPPER_FIELDS;
 
 function setCell(row: any, col: FieldDef, value: string) {
   row[col.key] =

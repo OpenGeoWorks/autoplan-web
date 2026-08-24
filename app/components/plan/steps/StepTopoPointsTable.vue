@@ -92,17 +92,7 @@
             <th
               v-for="col in tableColumns"
               :key="col.key"
-              draggable="true"
-              :title="`Drag to move the ${col.label} column`"
-              @dragstart="onHeaderDragStart(col.key)"
-              @dragover.prevent="onHeaderDragOver(col.key)"
-              @drop.prevent="onHeaderDrop(col.key)"
-              @dragend="onHeaderDragEnd"
-              class="cursor-grab active:cursor-grabbing select-none px-3 py-2 text-left"
-                            :class="[
-              dragKey === col.key ? 'opacity-40' : '',
-              overKey === col.key ? 'bg-blue-100 dark:bg-blue-900/40' : '',
-              ]"
+              class="px-3 py-2 text-left"
             >
               {{ col.label }}
             </th>
@@ -231,7 +221,6 @@
       :rows="rawRows"
       :fields="tableColumns"
       @confirm="onMappingConfirmed"
-      @reorder="setOrder"
     />
   </div>
 </template>
@@ -399,7 +388,6 @@ import {
   type FieldDef,
   type MappedRow,
 } from "~/utils/columnMapping";
-import { useColumnOrder, applyStoredOrder } from "~/composables/useColumnOrder";
 
 // Fields the mapper lets the user assign for a topographic points upload.
 // Elevation is required — spot heights are meaningless without it (and an
@@ -411,22 +399,8 @@ const MAPPER_FIELDS: FieldDef[] = [
   { ...asRequired(ELEVATION_FIELD), label: "Elevation (m)" },
 ];
 
-/** Column order of the table; follows the uploaded file once mapped. */
-const tableColumns = ref<FieldDef[]>(
-  applyStoredOrder("topo-points", MAPPER_FIELDS),
-);
-
-// Dragging a heading moves the column and its data; it does not change which
-// uploaded column feeds the field.
-const {
-  setOrder,
-  dragKey,
-  overKey,
-  onHeaderDragStart,
-  onHeaderDragOver,
-  onHeaderDrop,
-  onHeaderDragEnd,
-} = useColumnOrder("topo-points", tableColumns);
+/** Columns of the table, in their declared order. */
+const tableColumns: FieldDef[] = MAPPER_FIELDS;
 
 /** Write a cell back, parsing to a number unless the field is text. */
 function setCell(row: any, col: FieldDef, value: string) {

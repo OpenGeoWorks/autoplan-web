@@ -144,26 +144,6 @@ export function unmappedRequiredFields(
   return fields.filter((f) => f.required && mapping[f.key] == null);
 }
 
-/**
- * The fields in the order their source columns appear in the file, so a table
- * built from this mirrors the layout the surveyor uploaded. Swapping two
- * fields in the mapper reorders the table with them. Unmapped fields keep
- * their declared order and sort last — they have no column to sit beside.
- */
-export function orderedFields(
-  fields: FieldDef[],
-  mapping: ColumnMapping,
-): FieldDef[] {
-  return [...fields].sort((a, b) => {
-    const ai = mapping[a.key];
-    const bi = mapping[b.key];
-    if (ai == null && bi == null) return fields.indexOf(a) - fields.indexOf(b);
-    if (ai == null) return 1;
-    if (bi == null) return -1;
-    return ai - bi;
-  });
-}
-
 const toNumber = (v: unknown): number | null => {
   if (v === undefined || v === null || String(v).trim() === "") return null;
   const n = Number(String(v).trim());

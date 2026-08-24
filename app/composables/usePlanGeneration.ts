@@ -175,3 +175,31 @@ export async function getPlanScaleOptions(
   const { data } = await axios.get(`/plan/scale-options/${planId}`);
   return data?.data as PlanScaleOptions;
 }
+
+/**
+ * Fonts a plan can be drawn in.
+ *
+ * The list used to be five names hard-coded in the form, and the drawing
+ * engine's container carried none of them: every choice was drawn in the same
+ * fallback face, so the control appeared to do nothing. Which fonts exist is a
+ * property of that machine, so it is asked rather than assumed.
+ *
+ * Only families that engine has installed, so every one is drawn as itself.
+ * The list is shorter on some machines than others -- it is the machine that
+ * differs, and a menu that quietly substituted is what this replaced.
+ */
+export interface PlanFont {
+  family: string;
+  /** What the face is for, shown beside it in the control. */
+  note: string;
+}
+
+export interface PlanFontOptions {
+  default: string;
+  fonts: PlanFont[];
+}
+
+export async function getPlanFonts(): Promise<PlanFontOptions> {
+  const { data } = await axios.get("/plan/fonts");
+  return data?.data as PlanFontOptions;
+}
