@@ -175,3 +175,32 @@ export async function getPlanScaleOptions(
   const { data } = await axios.get(`/plan/scale-options/${planId}`);
   return data?.data as PlanScaleOptions;
 }
+
+/**
+ * Fonts a plan can be drawn in.
+ *
+ * The list used to be five names hard-coded in the form, and the drawing
+ * engine's container carried none of them: every choice was drawn in the same
+ * fallback face, so the control appeared to do nothing. Which fonts exist is a
+ * property of that machine, so it is asked rather than assumed.
+ *
+ * `installed` is whether the engine has the family itself; `drawn_as` is what
+ * the sheet really gets. Null means nothing there can supply it -- the one
+ * case where picking it would not do what it says.
+ */
+export interface PlanFont {
+  family: string;
+  note: string;
+  installed: boolean;
+  drawn_as: string | null;
+}
+
+export interface PlanFontOptions {
+  default: string;
+  fonts: PlanFont[];
+}
+
+export async function getPlanFonts(): Promise<PlanFontOptions> {
+  const { data } = await axios.get("/plan/fonts");
+  return data?.data as PlanFontOptions;
+}

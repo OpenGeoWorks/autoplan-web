@@ -179,12 +179,27 @@
             v-model="local.embellishment.font"
             class="w-full text-sm rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="Arial">Arial</option>
-            <option value="Helvetica">Helvetica</option>
-            <option value="Times New Roman">Times New Roman</option>
-            <option value="Courier New">Courier New</option>
-            <option value="Verdana">Verdana</option>
+            <!-- A plan saved with a font the engine no longer lists keeps it
+                 selectable rather than reading as blank. -->
+            <option v-if="hasCustomFont" :value="local.embellishment.font">
+              {{ local.embellishment.font }}
+            </option>
+            <option
+              v-for="f in fontChoices"
+              :key="f.family"
+              :value="f.family"
+              :disabled="!f.drawn_as"
+            >
+              {{ f.family
+              }}<template v-if="!f.drawn_as"> — not available</template>
+            </option>
           </select>
+          <p
+            v-if="fontNote"
+            class="mt-1 text-[11px] leading-snug text-gray-500 dark:text-gray-400"
+          >
+            {{ fontNote }}
+          </p>
         </div>
         <div>
           <label
@@ -535,7 +550,9 @@ import { NIGERIA_STATES } from "~/utils/nigeriaStates";
 import { PLAN_ORIGINS } from "~/utils/planOrigins";
 import { reactive, ref, watch, computed, onMounted } from "vue";
 import {
+  getPlanFonts,
   getPlanScaleOptions,
+  type PlanFont,
   type PlanScaleOptions,
 } from "~/composables/usePlanGeneration";
 
@@ -718,6 +735,52 @@ const PLAN_SCALES = [
  * that quietly offers everything is what we already had; a menu that offers
  * nothing because a request failed would be worse.
  */
+/**
+ * Fonts the drawing engine can actually honour.
+ *
+ * The list was five names written into this form, and the engine's container
+ * carried none of them by name -- so whichever was picked, the sheet came out
+ * in the same fallback face. Asking the engine is the only way this list can
+ * be true: which fonts exist is a property of that machine.
+ *
+ * Empty until it answers, and the dropdown then shows only whatever the plan
+ * is already set to, so it never renders a menu of fonts that would be
+ * silently substituted.
+ */
+const fontChoices = ref<PlanFont[]>([]);
+
+const hasCustomFont = computed(() => {
+  const font = local.embellishment.font;
+  return (
+    !!font && !fontChoices.value.some((f) => f.family === font)
+  );
+});
+
+/** What the chosen font will really be drawn in, when that is not itself. */
+const fontNote = computed(() => {
+  const chosen = fontChoices.value.find(
+    (f) => f.family === local.embellishment.font,
+  );
+  if (!chosen) return "";
+  if (!chosen.drawn_as) {
+    return `${chosen.family} is not installed on the drawing engine — pick another, or the plan falls back to a default face.`;
+  }
+  if (chosen.drawn_as !== chosen.family) {
+    return `${chosen.note}. Drawn in ${chosen.drawn_as}, which has the same widths.`;
+  }
+  return chosen.note;
+});
+
+onMounted(async () => {
+  try {
+    fontChoices.value = (await getPlanFonts()).fonts;
+  } catch {
+    // Leave the list empty rather than inventing one: a menu of fonts the
+    // engine has not confirmed is exactly what this replaced.
+    fontChoices.value = [];
+  }
+});
+
 const scaleAdvice = ref<PlanScaleOptions | null>(null);
 const scaleAdviceError = ref(false);
 
