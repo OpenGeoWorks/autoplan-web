@@ -422,17 +422,27 @@
               >
                 Coordinate Table
               </h2>
-              <span class="ml-2 text-xs text-gray-500 dark:text-gray-400"
-                >({{ planData.coordinates.length }})</span
-              >
+              <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                <!--
+                  The survey's size, not the table's. They differ for an
+                  uploaded survey, and the smaller number sitting beside an
+                  Export CSV that hands back every point reads as a promise
+                  the export does not keep.
+                -->
+                ({{ coordinateCount.toLocaleString() }}<template
+                  v-if="coordinateCount > planData.coordinates.length"
+                  >, showing {{ planData.coordinates.length }}</template
+                >)
+              </span>
               <div class="ml-auto flex items-center gap-2">
                 <CoordinatePrecisionSelector v-model="coordinatePrecision" />
                 <button
                   @click="exportCoordinates"
-                  class="text-xs px-2 py-1 border rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700"
-                  title="Export coordinates as CSV"
+                  :disabled="exportingCsv"
+                  class="text-xs px-2 py-1 border rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 disabled:opacity-50 dark:hover:bg-slate-700"
+                  title="Download every coordinate on this plan as CSV"
                 >
-                  Export CSV
+                  {{ exportingCsv ? "Preparing…" : "Export CSV" }}
                 </button>
                 <button
                   v-if="planData.coordinates.length > 10"
@@ -782,6 +792,7 @@ import {
   generatePlan as requestPlanGeneration,
   getPlanDownloadUrl,
 } from "~/composables/usePlanGeneration";
+import { exportCoordinatesCsv } from "~/composables/useCoordinateUpload";
 import { useCoordinatePrecision } from "~/composables/useCoordinatePrecision";
 import { formatPlanOrigin } from "~/utils/planOrigins";
 
@@ -1012,6 +1023,8 @@ const planData = reactive({
   basic: { name: "", type: "" },
   /** The last plan drawn for this record, if it has been generated before. */
   generated: null as { key?: string; generated_at?: string } | null,
+  /** Points held in the point store; the table shows a preview of them. */
+  pointCount: 0,
   coordinates: [] as any[],
   parcels: [] as any[],
   drawing: { file: null as File | null, fileName: "" },
@@ -1067,6 +1080,9 @@ async function fetchPlanData() {
       planData.basic.name = data.name || "";
       planData.basic.type = data.type || "";
       planData.generated = data.generated ?? null;
+      // The survey's real size. The table below holds a preview of it,
+      // so this is what the count and the export are measured against.
+      planData.pointCount = data.point_count ?? 0;
 
       // If computation only, determine the computation type and store data
       if (isComputationOnly.value) {
@@ -1162,32 +1178,45 @@ const visibleCoordinates = computed(() => {
   return planData.coordinates.slice(0, 10);
 });
 
-function exportCoordinates() {
-  if (!planData.coordinates || !planData.coordinates.length) {
-    toast?.add?.({ title: "No coordinates to export", color: "warning" });
-    return;
-  }
+/** How many points the plan holds: the stored survey, or the table when it is
+ *  all there is. */
+const coordinateCount = computed(
+  () => planData.pointCount || planData.coordinates.length,
+);
 
-  const rows = planData.coordinates.map((c: any) => {
-    return [
-      c.point ?? "",
-      c.northing ?? "",
-      c.easting ?? "",
-      c.elevation ?? "",
-    ].join(",");
-  });
-  const header = ["id", "northing", "easting", "elevation"].join(",");
-  const csv = [header, ...rows].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `coordinates_${planData.basic.name || planId}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  toast?.add?.({ title: "Coordinates exported", color: "success" });
+const exportingCsv = ref(false);
+
+/**
+ * Download the plan's coordinates.
+ *
+ * Asked of the server rather than built from `planData.coordinates`: that is a
+ * preview of an uploaded survey, so exporting it handed back two hundred
+ * points of however many were surveyed.
+ */
+async function exportCoordinates() {
+  if (exportingCsv.value) return;
+  exportingCsv.value = true;
+  try {
+    const { blob, fileName } = await exportCoordinatesCsv(planId);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast?.add?.({ title: "Coordinates exported", color: "success" });
+  } catch (error: any) {
+    toast?.add?.({
+      title: "Could not export the coordinates",
+      description:
+        error?.response?.data?.message || error?.message || "Please try again.",
+      color: "error",
+    });
+  } finally {
+    exportingCsv.value = false;
+  }
 }
 
 // Display-only: never groups thousands and honours the user's precision

@@ -231,3 +231,31 @@ export async function clearUploadedCoordinates(
   const params = kind ? `?kind=${kind}` : "";
   await axios.delete(`/plan/coordinates/uploaded/${planId}${params}`);
 }
+
+/**
+ * Download every coordinate on a plan as CSV.
+ *
+ * From the server, because the table only ever holds a preview of an uploaded
+ * survey: exporting what is on screen exported two hundred points of a million
+ * and called it the survey.
+ *
+ * The response is taken as a blob rather than parsed. The bytes are large but
+ * inert -- it is turning rows into objects that costs a browser, not holding
+ * them.
+ */
+export async function exportCoordinatesCsv(
+  planId: string,
+  kind: "coordinates" | "boundary" = "coordinates",
+): Promise<{ blob: Blob; fileName: string }> {
+  const response = await axios.get(
+    `/plan/coordinates/export/${planId}?kind=${kind}`,
+    { responseType: "blob", timeout: 0 },
+  );
+
+  const disposition = String(response.headers?.["content-disposition"] ?? "");
+  const match = disposition.match(/filename="?([^"]+)"?/);
+  return {
+    blob: response.data as Blob,
+    fileName: match?.[1] || "coordinates.csv",
+  };
+}
