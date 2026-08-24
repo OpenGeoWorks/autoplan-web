@@ -605,6 +605,51 @@
             </div>
           </div>
 
+          <!--
+            What this plan actually holds, by type. Built from the plan the
+            API returned rather than from the shapes this page maps it into,
+            so a layout plan's plots and a route's alignment are shown here
+            without every field having to be threaded through the page first.
+          -->
+          <div
+            v-if="!isComputationOnly && summarySections.length"
+            class="bg-white dark:bg-slate-800 rounded-lg shadow p-6"
+          >
+            <h2
+              class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4"
+            >
+              {{ planTypeLabel }} Summary
+            </h2>
+            <div class="space-y-5">
+              <div v-for="section in summarySections" :key="section.title">
+                <h3
+                  class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2"
+                >
+                  {{ section.title }}
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                  <div
+                    v-for="(item, idx) in section.items"
+                    :key="section.title + idx"
+                  >
+                    <div class="text-gray-500 dark:text-gray-400">
+                      {{ item.label || "&nbsp;" }}
+                    </div>
+                    <div class="text-gray-800 dark:text-gray-100">
+                      {{ item.value }}
+                    </div>
+                    <div
+                      v-if="item.note"
+                      class="text-[11px] text-gray-500 dark:text-gray-400"
+                    >
+                      {{ item.note }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Embellishment -->
           <div
             v-if="!isComputationOnly"
@@ -751,73 +796,6 @@
               </div>
             </div>
 
-            <!-- Topographic Settings (inside Embellishment) -->
-            <div
-              v-if="planData.basic.type === 'topographic'"
-              class="mt-4 border-t border-gray-100 dark:border-slate-700 pt-4"
-            >
-              <h3
-                class="text-sm font-medium text-gray-800 dark:text-gray-100 mb-3"
-              >
-                Topographic Settings
-              </h3>
-              <div
-                v-if="topographicSettings"
-                class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm"
-              >
-                <div>
-                  <div class="text-gray-500 dark:text-gray-400">
-                    Show Spot Heights
-                  </div>
-                  <div class="text-gray-800 dark:text-gray-100">
-                    {{ topographicSettings.show_spot_heights ? "Yes" : "No" }}
-                  </div>
-                </div>
-                <div>
-                  <div class="text-gray-500 dark:text-gray-400">
-                    Point Label Scale
-                  </div>
-                  <div class="text-gray-800 dark:text-gray-100">
-                    {{ topographicSettings.point_label_scale ?? "—" }}
-                  </div>
-                </div>
-                <div>
-                  <div class="text-gray-500 dark:text-gray-400">
-                    Show Contours
-                  </div>
-                  <div class="text-gray-800 dark:text-gray-100">
-                    {{ topographicSettings.show_contours ? "Yes" : "No" }}
-                  </div>
-                </div>
-                <div>
-                  <div class="text-gray-500 dark:text-gray-400">
-                    Contour Interval
-                  </div>
-                  <div class="text-gray-800 dark:text-gray-100">
-                    {{ topographicSettings.contour_interval ?? "—" }}
-                  </div>
-                </div>
-                <div>
-                  <div class="text-gray-500 dark:text-gray-400">
-                    Major Contour
-                  </div>
-                  <div class="text-gray-800 dark:text-gray-100">
-                    {{ topographicSettings.major_contour ?? "—" }}
-                  </div>
-                </div>
-                <div>
-                  <div class="text-gray-500 dark:text-gray-400">
-                    Minimum Distance
-                  </div>
-                  <div class="text-gray-800 dark:text-gray-100">
-                    {{ topographicSettings.minimum_distance ?? "—" }}
-                  </div>
-                </div>
-              </div>
-              <div v-else class="text-sm text-gray-500 dark:text-gray-400">
-                No topographic settings available.
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -871,6 +849,7 @@ import {
 import { exportCoordinatesCsv } from "~/composables/useCoordinateUpload";
 import { useCoordinatePrecision } from "~/composables/useCoordinatePrecision";
 import { formatPlanOrigin } from "~/utils/planOrigins";
+import { planSummary } from "~/utils/planSummary";
 
 const route = useRoute();
 const toast = useToast();
@@ -883,6 +862,22 @@ const showEditEmbellishmentModal = ref(false);
 const showAllCoordinates = ref(false);
 const { coordinatePrecision, formatCoordinateValue } = useCoordinatePrecision();
 const showConvertModal = ref(false);
+
+/**
+ * The plan exactly as the API returned it.
+ *
+ * Everything below maps it into the shapes the tables and the edit modal
+ * want, and a field not needed by either was simply dropped -- which is why
+ * this page had nothing to say about a layout plan's plots or a route's
+ * alignment. planSummary reads the plan itself instead.
+ */
+const rawPlan = ref<any>(null);
+const summarySections = computed(() => planSummary(rawPlan.value));
+
+const planTypeLabel = computed(() => {
+  const type = String(planData.basic.type || "");
+  return type ? type.charAt(0).toUpperCase() + type.slice(1) : "Plan";
+});
 
 const topographicSettings = ref<any>(null);
 const pageSize = ref<string | null>(null);
@@ -1155,6 +1150,7 @@ async function fetchPlanData() {
     const res = await axios.get(`/plan/fetch/${planId}`);
     const data = res?.data?.data;
     if (data) {
+      rawPlan.value = data;
       // Check if computation only
       isComputationOnly.value = data.computation_only === true;
 
@@ -1540,6 +1536,7 @@ async function refreshPlanData() {
     const res = await axios.get(`/plan/fetch/${planId}`);
     const data = res?.data?.data;
     if (data) {
+      rawPlan.value = data;
       // Update embellishment fields
       const emb: any = data;
       if (emb) {

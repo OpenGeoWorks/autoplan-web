@@ -133,14 +133,13 @@
           />
           <!-- Step 6: Report -->
           <StepReport
+            :plan="rawPlan"
             v-else-if="currentStep === 6"
             :generated="planData.generated"
             :model-value="reportModel"
             :basic="planData.basic"
             :coordinates-count="(planData.topoPoints || []).length"
             :parcels-count="0"
-            :topo-settings="planData.topoSettings"
-            :topo-boundary="planData.boundary"
             @update:model-value="onReportUpdate"
             @cancel="navigateTo(`/project/${projectId}`)"
             @finish="finishPlan"
@@ -200,13 +199,13 @@
           />
           <!-- Route Step 6: Report -->
           <StepReport
+            :plan="rawPlan"
             v-else-if="currentStep === 6"
             :generated="planData.generated"
             :model-value="reportModel"
             :basic="planData.basic"
             :coordinates-count="planData.elevations.length"
             :parcels-count="0"
-            :longitudinal-params="planData.longitudinal"
             @update:model-value="onReportUpdate"
             @cancel="navigateTo(`/project/${projectId}`)"
             @finish="finishPlan"
@@ -255,13 +254,13 @@
           />
           <!-- Layout Step 5: Report -->
           <StepReport
+            :plan="rawPlan"
             v-else-if="currentStep === 5"
             :generated="planData.generated"
             :model-value="reportModel"
             :basic="planData.basic"
             :coordinates-count="planData.boundary.length"
             :parcels-count="planData.layoutDesign.plots.length"
-            :layout-params="planData.layoutDesign"
             @update:model-value="onReportUpdate"
             @cancel="navigateTo(`/project/${projectId}`)"
             @finish="finishPlan"
@@ -325,6 +324,7 @@
           />
           <!-- Step 6: Report -->
           <StepReport
+            :plan="rawPlan"
             v-else-if="currentStep === 6"
             :generated="planData.generated"
             :model-value="reportModel"
@@ -368,6 +368,13 @@ const toast = useToast();
 
 const projectId = route.params.id as string;
 const planId = route.params.plan as string;
+
+/**
+ * The plan exactly as the API returned it, kept for the report step's type
+ * summary. Everything else on this page works from the mapped `planData`,
+ * which drops any field the form does not edit.
+ */
+const rawPlan = ref<any>(null);
 const submittingCoordinates = ref(false);
 const submittingParcels = ref(false);
 const submittingElevation = ref(false);
@@ -550,6 +557,7 @@ const fetchPlan = async (skipNavigation = false) => {
     const res = await axios.get(`/plan/fetch/${planId}`);
     const data = res?.data?.data;
     if (data) {
+      rawPlan.value = data;
       // Basic
       planData.basic.name = data.name || "";
       planData.basic.type = data.type || "";

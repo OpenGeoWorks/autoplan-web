@@ -189,144 +189,47 @@
         </div>
       </div>
       
-      <!-- Topographic Settings & Boundary (topo plans) -->
-      <div v-if="props.basic?.type === 'topographic'" class="border border-gray-200 dark:border-slate-700 rounded-md p-4 bg-white dark:bg-slate-800">
-        <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4">Topographic Summary</h3>
-
-        <div class="mb-4">
-          <h4 class="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2">Topographic Settings</h4>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Show spot heights:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ formatBool(props.topoSettings?.show_spot_heights) }}</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Point label scale:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.topoSettings?.point_label_scale ?? '—' }}</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Show contours:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ formatBool(props.topoSettings?.show_contours) }}</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Contour interval:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.topoSettings?.contour_interval ?? '—' }}</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Major contour:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.topoSettings?.major_contour ?? '—' }}</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Minimum distance:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.topoSettings?.minimum_distance ?? '—' }}</span>
-            </div>
-            <!-- <div>
-              <span class="text-gray-500 dark:text-gray-400">Grid:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ formatBool(props.topoSettings?.grid) }}</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">TIN:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ formatBool(props.topoSettings?.tin) }}</span>
-            </div> -->
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Show contour labels:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ formatBool(props.topoSettings?.show_contours_labels) }}</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Show TIN mesh:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ formatBool(props.topoSettings?.show_tin_mesh) }}</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Show coordinate grid:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ formatBool(props.topoSettings?.show_grid) }}</span>
+      <!--
+        What this plan holds, by type. Read off the plan the API returned
+        rather than assembled from props, which is how this step came to show
+        a route's four profile numbers but not its right of way, and a layout
+        plan's parameters but neither its plots nor its roads.
+      -->
+      <div
+        v-if="summarySections.length"
+        class="border border-gray-200 dark:border-slate-700 rounded-md p-4 bg-white dark:bg-slate-800"
+      >
+        <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4">
+          {{ planTypeLabel }} Summary
+        </h3>
+        <div class="space-y-5">
+          <div v-for="section in summarySections" :key="section.title">
+            <h4
+              class="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2"
+            >
+              {{ section.title }}
+            </h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+              <div
+                v-for="(item, idx) in section.items"
+                :key="section.title + idx"
+              >
+                <span class="text-gray-500 dark:text-gray-400"
+                  >{{ item.label }}<template v-if="item.label">:</template></span
+                >
+                <span class="ml-2 text-gray-800 dark:text-gray-100">{{
+                  item.value
+                }}</span>
+                <div
+                  v-if="item.note"
+                  class="text-[11px] text-gray-500 dark:text-gray-400"
+                >
+                  {{ item.note }}
+                </div>
+              </div>
             </div>
           </div>
         </div>
-
-        <!-- <div v-if="Array.isArray(props.topoBoundary)" class="mb-2">
-          <h4 class="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2">Boundary</h4>
-          <div class="text-sm text-gray-800 dark:text-gray-100">
-            <div>Points: {{ props.topoBoundary.length }}</div>
-            <div class="mt-2">Sample points:</div>
-            <ul class="list-disc ml-5 mt-1">
-              <li v-for="(p, idx) in props.topoBoundary.slice(0,5)" :key="idx">{{ p.id || p.point || ('#' + (idx+1)) }} — N: {{ p.northing }} E: {{ p.easting }} Z: {{ p.elevation }}</li>
-            </ul>
-          </div>
-        </div> -->
-      </div>
-
-      <!-- Longitudinal Profile Parameters (route plans) -->
-      <div v-if="props.basic?.type === 'route' && props.longitudinalParams" class="border border-gray-200 dark:border-slate-700 rounded-md p-4 bg-white dark:bg-slate-800">
-        <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4">Longitudinal Profile Parameters</h3>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-          <div>
-            <span class="text-gray-500 dark:text-gray-400">Horizontal Scale:</span>
-            <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.longitudinalParams?.horizontal_scale ?? '—' }}</span>
-          </div>
-          <div>
-            <span class="text-gray-500 dark:text-gray-400">Vertical Scale:</span>
-            <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.longitudinalParams?.vertical_scale ?? '—' }}</span>
-          </div>
-          <div>
-            <span class="text-gray-500 dark:text-gray-400">Station Interval:</span>
-            <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.longitudinalParams?.station_interval ?? '—' }} m</span>
-          </div>
-          <div>
-            <span class="text-gray-500 dark:text-gray-400">Elevation Interval:</span>
-            <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.longitudinalParams?.elevation_interval ?? '—' }} m</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Layout Design (layout plans) -->
-      <div v-if="props.basic?.type === 'layout' && props.layoutParams" class="border border-gray-200 dark:border-slate-700 rounded-md p-4 bg-white dark:bg-slate-800">
-        <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4">Layout Design</h3>
-
-        <template v-if="props.layoutParams?.mode === 'draw'">
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Mode:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">Designed layout (drawn as entered)</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Plots:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.plots?.length ?? 0 }}</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Roads:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.roads?.length ?? 0 }}</span>
-            </div>
-          </div>
-        </template>
-        <template v-else>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Mode:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">Auto-generated subdivision</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Plot Module:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.params?.plot?.frontage ?? '—' }} m × {{ props.layoutParams?.params?.plot?.depth ?? '—' }} m</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Roads (major/collector/access):</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.params?.roads?.major_width ?? '—' }} / {{ props.layoutParams?.params?.roads?.collector_width ?? '—' }} / {{ props.layoutParams?.params?.roads?.access_width ?? '—' }} m</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Max Block Length:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.params?.blocks?.max_length ?? '—' }} m</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Open Space:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ props.layoutParams?.params?.reserves?.open_space_percent ?? '—' }}%</span>
-            </div>
-            <div>
-              <span class="text-gray-500 dark:text-gray-400">Facilities:</span>
-              <span class="ml-2 text-gray-800 dark:text-gray-100">{{ (props.layoutParams?.params?.reserves?.facilities || []).join(', ') || 'None' }}</span>
-            </div>
-          </div>
-        </template>
       </div>
 
       <!-- Plan Generation Section -->
@@ -498,6 +401,7 @@ import {
   describeProgress,
 } from "~/composables/usePlanGeneration";
 import { formatPlanOrigin } from "~/utils/planOrigins";
+import { planSummary } from "~/utils/planSummary";
 
 interface Basic {
   name: string;
@@ -516,13 +420,6 @@ const props = defineProps<{
   basic: Basic;
   coordinatesCount: number;
   parcelsCount: number;
-  // Topographic-specific (optional)
-  topoSettings?: Record<string, any> | null;
-  topoBoundary?: Array<Record<string, any>> | null;
-  // Route-specific (optional)
-  longitudinalParams?: Record<string, any> | null;
-  // Layout-specific (optional)
-  layoutParams?: Record<string, any> | null;
   /**
    * The last plan drawn for this record, if there is one.
    *
@@ -530,12 +427,25 @@ const props = defineProps<{
    * worth offering rather than making someone draw it again to get the file.
    */
   generated?: { key?: string; generated_at?: string; scale?: number } | null;
+  /**
+   * The plan as the API returned it, for the type summary below. Optional so
+   * a step rendered before the plan has been fetched simply shows no summary
+   * rather than failing.
+   */
+  plan?: Record<string, any> | null;
 }>();
 const emit = defineEmits(["cancel", "finish"]);
 
 const route = useRoute();
 const toast = useToast();
 const planId = route.params.plan as string;
+
+const summarySections = computed(() => planSummary(props.plan));
+
+const planTypeLabel = computed(() => {
+  const type = String(props.basic?.type || "");
+  return type ? type.charAt(0).toUpperCase() + type.slice(1) : "Plan";
+});
 
 const local = reactive({
   report: { generate: true },
@@ -674,9 +584,4 @@ function formatBeaconType(beaconType: string | null | undefined) {
   return beaconType.replace(/_/g, " ").toUpperCase();
 }
 
-function formatBool(v: boolean | null | undefined) {
-  if (v === true) return "Yes";
-  if (v === false) return "No";
-  return "—";
-}
 </script>
