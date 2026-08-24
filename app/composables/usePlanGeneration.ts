@@ -184,15 +184,14 @@ export async function getPlanScaleOptions(
  * fallback face, so the control appeared to do nothing. Which fonts exist is a
  * property of that machine, so it is asked rather than assumed.
  *
- * `installed` is whether the engine has the family itself; `drawn_as` is what
- * the sheet really gets. Null means nothing there can supply it -- the one
- * case where picking it would not do what it says.
+ * Only families that engine has installed, so every one is drawn as itself.
+ * The list is shorter on some machines than others -- it is the machine that
+ * differs, and a menu that quietly substituted is what this replaced.
  */
 export interface PlanFont {
   family: string;
+  /** What the face is for, shown beside it in the control. */
   note: string;
-  installed: boolean;
-  drawn_as: string | null;
 }
 
 export interface PlanFontOptions {

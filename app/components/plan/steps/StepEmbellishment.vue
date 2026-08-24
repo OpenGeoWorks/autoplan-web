@@ -184,14 +184,8 @@
             <option v-if="hasCustomFont" :value="local.embellishment.font">
               {{ local.embellishment.font }}
             </option>
-            <option
-              v-for="f in fontChoices"
-              :key="f.family"
-              :value="f.family"
-              :disabled="!f.drawn_as"
-            >
-              {{ f.family
-              }}<template v-if="!f.drawn_as"> — not available</template>
+            <option v-for="f in fontChoices" :key="f.family" :value="f.family">
+              {{ f.family }}
             </option>
           </select>
           <p
@@ -743,9 +737,13 @@ const PLAN_SCALES = [
  * in the same fallback face. Asking the engine is the only way this list can
  * be true: which fonts exist is a property of that machine.
  *
+ * Only the families it has installed, so every one is drawn as itself. It
+ * used to report substitutes too, which put fonts in the menu that would be
+ * quietly stood in for -- picking Verdana on the deployed image drew DejaVu
+ * Sans and the sheet gave no sign of it.
+ *
  * Empty until it answers, and the dropdown then shows only whatever the plan
- * is already set to, so it never renders a menu of fonts that would be
- * silently substituted.
+ * is already set to, rather than a menu nobody has confirmed.
  */
 const fontChoices = ref<PlanFont[]>([]);
 
@@ -756,19 +754,16 @@ const hasCustomFont = computed(() => {
   );
 });
 
-/** What the chosen font will really be drawn in, when that is not itself. */
+/** What the chosen face is for, or a warning when the plan holds one the
+ *  drawing engine no longer has. */
 const fontNote = computed(() => {
-  const chosen = fontChoices.value.find(
-    (f) => f.family === local.embellishment.font,
-  );
-  if (!chosen) return "";
-  if (!chosen.drawn_as) {
-    return `${chosen.family} is not installed on the drawing engine — pick another, or the plan falls back to a default face.`;
+  const font = local.embellishment.font;
+  const chosen = fontChoices.value.find((f) => f.family === font);
+  if (chosen) return chosen.note;
+  if (font && fontChoices.value.length) {
+    return `${font} is not available on the drawing engine — the plan will be drawn in the closest face it has. Pick one from the list to choose for yourself.`;
   }
-  if (chosen.drawn_as !== chosen.family) {
-    return `${chosen.note}. Drawn in ${chosen.drawn_as}, which has the same widths.`;
-  }
-  return chosen.note;
+  return "";
 });
 
 onMounted(async () => {
