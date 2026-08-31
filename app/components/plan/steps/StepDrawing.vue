@@ -188,12 +188,12 @@
                 :key="i"
                 class="border-t border-gray-100 dark:border-slate-700/60"
               >
-                <td class="px-2 py-1">{{ leg.distance }}</td>
+                <td class="px-2 py-1">{{ formatCoordinateValue(leg.distance) }}</td>
                 <td class="px-2 py-1">
                   {{ formatBearing(leg.bearing?.decimal) }}
                 </td>
-                <td class="px-2 py-1">{{ leg.delta_easting }}</td>
-                <td class="px-2 py-1">{{ leg.delta_northing }}</td>
+                <td class="px-2 py-1">{{ formatCoordinateValue(leg.delta_easting) }}</td>
+                <td class="px-2 py-1">{{ formatCoordinateValue(leg.delta_northing) }}</td>
                 <td class="px-2 py-1">{{ formatCoordinateValue(leg.to.easting) }}</td>
                 <td class="px-2 py-1">{{ formatCoordinateValue(leg.to.northing) }}</td>
                 <td class="px-2 py-1">{{ leg.to.id }}</td>
@@ -204,7 +204,7 @@
         <div class="text-sm text-gray-700 dark:text-gray-300 space-y-1">
           <div>
             <strong>Total distance:</strong>
-            {{ boundaryTraverse?.total_distance }} m
+            {{ formatCoordinateValue(boundaryTraverse?.total_distance) }} m
           </div>
           <div v-if="boundaryTraverse?.area">
             <strong>Area:</strong> {{ formatArea(boundaryTraverse.area) }}
@@ -589,8 +589,12 @@ function formatBearing(decimalDeg: number | null | undefined) {
     deg += 1;
   }
 
-  const secondsStr = secondsFloat.toFixed(6).replace(/\.?(0+)$/, "");
-  return `${sign}${deg}° ${minutes}' ${secondsStr}"`;
+  let secondsStr = secondsFloat.toFixed(6).replace(/\.?(0+)$/, "");
+  const [secondsInt, secondsFrac] = secondsStr.split(".");
+  secondsStr = secondsFrac !== undefined
+    ? `${secondsInt.padStart(2, "0")}.${secondsFrac}`
+    : secondsInt.padStart(2, "0");
+  return `${sign}${String(deg).padStart(2, "0")}° ${String(minutes).padStart(2, "0")}' ${secondsStr}"`;
 }
 
 function formatArea(area: number | null | undefined) {

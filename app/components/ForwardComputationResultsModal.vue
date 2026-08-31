@@ -216,7 +216,10 @@ const fmt = (v: number | undefined | null, d = 3): string => {
 
 const formatBearing = (b: Bearing | undefined): string => {
   if (!b) return "-";
-  return `${b.degrees ?? 0}° ${b.minutes ?? 0}' ${b.seconds ?? 0}"`;
+  const degrees = String(b.degrees ?? 0).padStart(2, "0");
+  const minutes = String(b.minutes ?? 0).padStart(2, "0");
+  const seconds = String(b.seconds ?? 0).padStart(2, "0");
+  return `${degrees}° ${minutes}' ${seconds}"`;
 };
 
 // Format an area in square metres, adding a hectares equivalent for large areas.
@@ -242,9 +245,9 @@ const rows = computed(() =>
   legs.value.map((leg) => ({
     fromStation: leg.from.id,
     bearing: formatBearing(leg.bearing),
-    distance: fmt(leg.distance),
-    deltaN: fmt(leg.delta_northing),
-    deltaE: fmt(leg.delta_easting),
+    distance: formatCoordinateValue(leg.distance, ""),
+    deltaN: formatCoordinateValue(leg.delta_northing, ""),
+    deltaE: formatCoordinateValue(leg.delta_easting, ""),
     northing: leg.to.northing,
     easting: leg.to.easting,
     toStation: leg.to.id,
@@ -306,7 +309,7 @@ const exportToCSV = () => {
     csvRows.push(
       [
         leg.from.id,
-        `${leg.bearing.degrees}-${leg.bearing.minutes}-${leg.bearing.seconds}`,
+        `${String(leg.bearing.degrees).padStart(2, "0")}-${String(leg.bearing.minutes).padStart(2, "0")}-${String(leg.bearing.seconds).padStart(2, "0")}`,
         fmt(leg.distance),
         fmt(leg.delta_northing),
         fmt(leg.delta_easting),

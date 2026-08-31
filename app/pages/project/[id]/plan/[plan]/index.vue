@@ -897,8 +897,15 @@ const showsCoordinatePrecision = computed(() =>
  * just a name. This renders whatever the computation actually holds, in one
  * shape the template can lay out without knowing the type.
  */
+const padDms = (n: number, width: number): string => {
+  const sign = n < 0 ? "-" : "";
+  return sign + Math.abs(n).toString().padStart(width, "0");
+};
+
 const dms = (b: any): string =>
-  b ? `${b.degrees ?? 0}° ${b.minutes ?? 0}' ${Number(b.seconds ?? 0).toFixed(2)}"` : "—";
+  b
+    ? `${padDms(b.degrees ?? 0, 2)}° ${padDms(b.minutes ?? 0, 2)}' ${Number(b.seconds ?? 0).toFixed(2).padStart(5, "0")}"`
+    : "—";
 
 const num = (v: any, d = 3): string =>
   v === null || v === undefined || v === "" || isNaN(Number(v))
@@ -934,7 +941,7 @@ const computationView = computed(() => {
             p.id ?? "—",
             formatNumber(p.northing),
             formatNumber(p.easting),
-            num(p.elevation),
+            formatNumber(p.elevation),
           ]),
         },
       ],
@@ -970,7 +977,7 @@ const computationView = computed(() => {
           leg.from?.id ?? "—",
           leg.to?.id ?? "—",
           dms(leg.bearing),
-          num(leg.distance),
+          formatNumber(leg.distance),
         ]),
       });
     } else {
@@ -987,14 +994,14 @@ const computationView = computed(() => {
         ],
         rows: legacyRows.map((row: any) => [
           row.pointId ?? "—",
-          num(row.distance),
+          formatNumber(row.distance),
           dms({
             degrees: row.degrees,
             minutes: row.minutes,
             seconds: row.seconds,
           }),
-          num(row.departure),
-          num(row.latitude),
+          formatNumber(row.departure),
+          formatNumber(row.latitude),
           formatNumber(row.northing),
           formatNumber(row.easting),
         ]),
@@ -1046,7 +1053,7 @@ const computationView = computed(() => {
             leg.from?.id ?? "—",
             leg.to?.id ?? "—",
             dms(leg.observed_angle),
-            num(leg.distance),
+            formatNumber(leg.distance),
           ]),
         },
       ],

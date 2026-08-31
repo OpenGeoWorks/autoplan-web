@@ -80,6 +80,10 @@
           </div>
         </div>
 
+        <div class="mb-2 flex justify-end">
+          <CoordinatePrecisionSelector v-model="coordinatePrecision" />
+        </div>
+
         <div class="overflow-x-auto">
           <!-- Loading Skeleton -->
           <div v-if="isLoading" class="space-y-4">
@@ -438,11 +442,7 @@
                     >Total Distance:</span
                   >
                   <span class="font-mono text-gray-900 dark:text-gray-100">
-                    {{
-                      computationResults.data?.traverse?.total_distance?.toFixed(
-                        2
-                      ) || "0.00"
-                    }}
+                    {{ formatCoordinateValue(computationResults.data?.traverse?.total_distance, "0.00") }}
                     m
                   </span>
                 </div>
@@ -525,6 +525,7 @@ import { navigateTo } from "#imports";
 import { ref, computed, onMounted, watch } from "vue";
 import ForwardComputationResultsModal from "~/components/ForwardComputationResultsModal.vue";
 import SaveDataChoiceModal from "~/components/SaveDataChoiceModal.vue";
+import { useCoordinatePrecision } from "~/composables/useCoordinatePrecision";
 
 interface ForwardRow {
   pointId: string;
@@ -547,6 +548,7 @@ const route = useRoute();
 const projectId = route.params.id as string;
 const planId = route.params.plan as string;
 const isComputationOnly = ref(false);
+const { coordinatePrecision, formatCoordinateValue } = useCoordinatePrecision();
 
 // Reactive data for the unified table
 const forwardRows = ref<ForwardRow[]>([

@@ -54,12 +54,12 @@
                 <td class="px-2 py-1">{{ legs[0].from.id }}</td>
               </tr>
               <tr v-for="(leg, i) in legs" :key="i" class="border-t">
-                <td class="px-2 py-1">{{ leg.distance }}</td>
+                <td class="px-2 py-1">{{ formatCoordinateValue(leg.distance) }}</td>
                 <td class="px-2 py-1">
                   {{ formatBearing(leg.bearing?.decimal) }}
                 </td>
-                <td class="px-2 py-1">{{ leg.delta_easting }}</td>
-                <td class="px-2 py-1">{{ leg.delta_northing }}</td>
+                <td class="px-2 py-1">{{ formatCoordinateValue(leg.delta_easting) }}</td>
+                <td class="px-2 py-1">{{ formatCoordinateValue(leg.delta_northing) }}</td>
                 <td class="px-2 py-1">{{ formatCoordinateValue(leg.to.easting) }}</td>
                 <td class="px-2 py-1">{{ formatCoordinateValue(leg.to.northing) }}</td>
                 <td class="px-2 py-1">{{ leg.to.id }}</td>
@@ -69,7 +69,7 @@
         </div>
         <div class="mt-3">
           <div>
-            <strong>Total distance:</strong> {{ traverse.total_distance }} m
+            <strong>Total distance:</strong> {{ formatCoordinateValue(traverse.total_distance) }} m
           </div>
           <div v-if="traverse.area && !isRouteType" class="mt-1">
             <strong>Area:</strong> {{ formatArea(traverse.area) }}
@@ -213,7 +213,11 @@ function formatBearing(decimalDeg: number | null | undefined) {
 
   // Format seconds with up to 6 decimal places, trim trailing zeros and optional trailing dot
   let secondsStr = secondsFloat.toFixed(6).replace(/\.?(0+)$/, "");
-  return `${sign}${deg}° ${minutes}' ${secondsStr}\"`;
+  const [secondsInt, secondsFrac] = secondsStr.split(".");
+  secondsStr = secondsFrac !== undefined
+    ? `${secondsInt.padStart(2, "0")}.${secondsFrac}`
+    : secondsInt.padStart(2, "0");
+  return `${sign}${String(deg).padStart(2, "0")}° ${String(minutes).padStart(2, "0")}' ${secondsStr}\"`;
 }
 
 function formatArea(area: number | null | undefined) {
