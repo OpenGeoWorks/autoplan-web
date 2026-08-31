@@ -217,7 +217,7 @@ function formatBearing(decimalDeg: number | null | undefined) {
   secondsStr = secondsFrac !== undefined
     ? `${secondsInt.padStart(2, "0")}.${secondsFrac}`
     : secondsInt.padStart(2, "0");
-  return `${sign}${String(deg).padStart(2, "0")}° ${String(minutes).padStart(2, "0")}' ${secondsStr}\"`;
+  return `${sign}${String(deg).padStart(3, "0")}° ${String(minutes).padStart(2, "0")}' ${secondsStr}\"`;
 }
 
 function formatArea(area: number | null | undefined) {

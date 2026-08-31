@@ -594,7 +594,7 @@ function formatBearing(decimalDeg: number | null | undefined) {
   secondsStr = secondsFrac !== undefined
     ? `${secondsInt.padStart(2, "0")}.${secondsFrac}`
     : secondsInt.padStart(2, "0");
-  return `${sign}${String(deg).padStart(2, "0")}° ${String(minutes).padStart(2, "0")}' ${secondsStr}"`;
+  return `${sign}${String(deg).padStart(3, "0")}° ${String(minutes).padStart(2, "0")}' ${secondsStr}"`;
 }
 
 function formatArea(area: number | null | undefined) {
@@ -1428,10 +1428,10 @@ function splitBearingLabels(bearing?: {
     deg = ((deg || 0) + extraDegrees) % 360;
   }
 
+  // Whole-circle bearings are written to three figures (000-359), matching
+  // the drawn sheet so the preview and the plan read identically.
   const degreeValue = (((deg || 0) % 360) + 360) % 360;
-  const degreeText = `${
-    degreeValue < 10 ? `0${degreeValue}` : String(degreeValue)
-  }°`;
+  const degreeText = `${String(degreeValue).padStart(3, "0")}°`;
 
   const minuteValue = Math.max(0, minutes ?? 0);
   const minuteText = `${String(Math.abs(minuteValue)).padStart(2, "0")}'`;

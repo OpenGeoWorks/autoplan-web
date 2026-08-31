@@ -545,7 +545,7 @@ function padDms(n: number, width: number): string {
 function formatBearing(dms: DMS | undefined | null): string {
   if (!dms) return "-";
   const r = roundBearing(dms);
-  return `${padDms(r.degrees, 2)}°${padDms(r.minutes, 2)}'${padDms(r.seconds, 2)}"`;
+  return `${padDms(r.degrees, 3)}°${padDms(r.minutes, 2)}'${padDms(r.seconds, 2)}"`;
 }
 
 // Format an area in square metres, adding a hectares equivalent for large areas.
