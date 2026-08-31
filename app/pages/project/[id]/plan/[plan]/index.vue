@@ -904,7 +904,7 @@ const padDms = (n: number, width: number): string => {
 
 const dms = (b: any): string =>
   b
-    ? `${padDms(b.degrees ?? 0, 2)}° ${padDms(b.minutes ?? 0, 2)}' ${Number(b.seconds ?? 0).toFixed(2).padStart(5, "0")}"`
+    ? `${padDms(b.degrees ?? 0, 3)}° ${padDms(b.minutes ?? 0, 2)}' ${Number(b.seconds ?? 0).toFixed(2).padStart(5, "0")}"`
     : "—";
 
 const num = (v: any, d = 3): string =>

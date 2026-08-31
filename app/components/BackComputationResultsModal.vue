@@ -250,7 +250,7 @@ const fmt = (v: number | undefined | null, d = 3): string => {
 
 const formatBearing = (b: Bearing | undefined): string => {
   if (!b) return "-";
-  const degrees = String(b.degrees ?? 0).padStart(2, "0");
+  const degrees = String(b.degrees ?? 0).padStart(3, "0");
   const minutes = String(b.minutes ?? 0).padStart(2, "0");
   const seconds = fmt(b.seconds, 2).padStart(5, "0");
   return `${degrees}° ${minutes}' ${seconds}"`;
@@ -340,7 +340,7 @@ const exportToCSV = () => {
     csvRows.push(
       [
         fmt(leg.distance),
-        `${String(leg.bearing?.degrees ?? 0).padStart(2, "0")}-${String(leg.bearing?.minutes ?? 0).padStart(2, "0")}-${fmt(leg.bearing?.seconds, 2).padStart(5, "0")}`,
+        `${String(leg.bearing?.degrees ?? 0).padStart(3, "0")}-${String(leg.bearing?.minutes ?? 0).padStart(2, "0")}-${fmt(leg.bearing?.seconds, 2).padStart(5, "0")}`,
         fmt(leg.delta_easting),
         fmt(leg.delta_northing),
         fmt(leg.to.easting),
