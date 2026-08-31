@@ -285,6 +285,33 @@
             </svg>
             Plan generated and downloaded successfully!
           </div>
+          <div
+            v-if="generationState.scaleAdjustment"
+            role="status"
+            class="mt-3 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200"
+          >
+            <svg
+              class="mt-0.5 h-4 w-4 shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+              />
+            </svg>
+            <p class="text-xs leading-5">
+              The plan did not fit at your selected scale of
+              1:{{ generationState.scaleAdjustment.selected.toLocaleString() }}.
+              AutoPlan used
+              1:{{ generationState.scaleAdjustment.actual.toLocaleString() }}
+              instead.
+            </p>
+          </div>
           <!-- The browser may have blocked the automatic download, and the
                file is worth a second chance without redrawing it. -->
           <button
@@ -502,6 +529,7 @@ const generationState = reactive({
   url: null as string | null,
   error: null as string | null,
   progress: emptyProgress(),
+  scaleAdjustment: null as { selected: number; actual: number } | null,
 });
 
 // Sync from parent once on mount and whenever the reference changes (avoid deep echo loops)
@@ -526,19 +554,30 @@ async function generatePlan() {
     generationState.loading = true;
     generationState.error = null;
     generationState.url = null;
+    generationState.scaleAdjustment = null;
 
     // A large survey is generated as a background job; this follows it and
-    // reports progress, and returns the URL either way.
-    const url = await runGeneration(planId, (progress) => {
+    // reports progress, and returns the engine's final result either way.
+    const result = await runGeneration(planId, (progress) => {
       generationState.progress = progress;
     });
 
-    if (url) {
-      generationState.url = url;
+    if (result.url) {
+      generationState.url = result.url;
+      if (
+        result.scale_adjusted_from &&
+        result.scale &&
+        result.scale_adjusted_from !== result.scale
+      ) {
+        generationState.scaleAdjustment = {
+          selected: result.scale_adjusted_from,
+          actual: result.scale,
+        };
+      }
       
       // Automatically trigger download
       const link = document.createElement('a');
-      link.href = url;
+      link.href = result.url;
       link.download = ''; // Browser will use filename from URL
       document.body.appendChild(link);
       link.click();
@@ -546,7 +585,9 @@ async function generatePlan() {
       
       toast?.add?.({
         title: "Plan generated successfully!",
-        description: "Your plan download has started.",
+        description: generationState.scaleAdjustment
+          ? `Your selected scale did not fit, so the plan was drawn at 1:${generationState.scaleAdjustment.actual.toLocaleString()}.`
+          : "Your plan download has started.",
         color: "success",
       });
     } else {

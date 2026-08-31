@@ -1468,22 +1468,34 @@ async function generatePlan() {
     generationState.error = null;
     generationState.url = null;
 
-    const url = await requestPlanGeneration(planId);
-    generationState.url = url;
+    const result = await requestPlanGeneration(planId);
+    generationState.url = result.url;
 
     // Create a temporary anchor element to trigger download
     const link = document.createElement("a");
-    link.href = url;
+    link.href = result.url;
     link.download = `plan_${planData.basic.name || planId}.zip`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 
-    toast?.add?.({
-      title: "Plan generated successfully!",
-      description: "Your plan package has been downloaded.",
-      color: "success",
-    });
+    const scaleWasAdjusted =
+      result.scale_adjusted_from &&
+      result.scale &&
+      result.scale_adjusted_from !== result.scale;
+    toast?.add?.(
+      scaleWasAdjusted
+        ? {
+            title: `Plan drawn at 1:${result.scale!.toLocaleString()}`,
+            description: `Your selected 1:${result.scale_adjusted_from!.toLocaleString()} scale did not fit, so AutoPlan used 1:${result.scale!.toLocaleString()} instead.`,
+            color: "warning",
+          }
+        : {
+            title: "Plan generated successfully!",
+            description: "Your plan package has been downloaded.",
+            color: "success",
+          }
+    );
   } catch (error: any) {
     console.error("Plan generation error:", error);
     const errorMessage =
