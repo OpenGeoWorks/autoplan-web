@@ -20,7 +20,17 @@ export interface PlanJob {
   percent: number;
   url?: string;
   error?: string;
+  scale?: number;
+  scale_adjusted_from?: number;
   point_count?: number;
+}
+
+export interface PlanGenerationResult {
+  url: string;
+  /** Scale the drawing engine actually used. */
+  scale?: number;
+  /** Requested scale when the engine had to zoom the plan out. */
+  scale_adjusted_from?: number;
 }
 
 export interface GenerationProgress {
@@ -59,7 +69,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export async function generatePlan(
   planId: string,
   onProgress?: (progress: GenerationProgress) => void,
-): Promise<string> {
+): Promise<PlanGenerationResult> {
   const response = await axios.get(`/plan/generate/${planId}`, {
     // 202 means queued, which axios must not treat as a failure.
     validateStatus: (status) => status === 200 || status === 202,
@@ -67,7 +77,16 @@ export async function generatePlan(
 
   const data = response.data?.data;
 
-  if (data?.url) return data.url as string;
+  if (data?.url) {
+    return {
+      url: data.url as string,
+      scale: typeof data.scale === "number" ? data.scale : undefined,
+      scale_adjusted_from:
+        typeof data.scale_adjusted_from === "number"
+          ? data.scale_adjusted_from
+          : undefined,
+    };
+  }
 
   const job = data?.job as PlanJob | undefined;
   if (!job?.id) throw new Error("The server did not return a plan or a job");
@@ -79,7 +98,7 @@ export async function generatePlan(
 export async function followJob(
   jobId: string,
   onProgress?: (progress: GenerationProgress) => void,
-): Promise<string> {
+): Promise<PlanGenerationResult> {
   let lastChange = Date.now();
   let lastSignature = "";
 
@@ -99,7 +118,14 @@ export async function followJob(
 
     if (job.status === "done") {
       if (!job.url) throw new Error("The job finished without producing a plan");
-      return job.url;
+      return {
+        url: job.url,
+        scale: typeof job.scale === "number" ? job.scale : undefined,
+        scale_adjusted_from:
+          typeof job.scale_adjusted_from === "number"
+            ? job.scale_adjusted_from
+            : undefined,
+      };
     }
 
     if (job.status === "failed") {

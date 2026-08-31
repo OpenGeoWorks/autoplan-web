@@ -287,6 +287,32 @@
             class="w-full text-sm rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
+        <div
+          v-if="scaleAdjustment"
+          role="status"
+          class="sm:col-span-2 lg:col-span-5 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200"
+        >
+          <svg
+            class="mt-0.5 h-4 w-4 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+            />
+          </svg>
+          <p class="text-xs leading-5">
+            The plan will not fit on {{ scaleAdjustment.pageSize }}
+            {{ scaleAdjustment.orientation }} at your selected scale of
+            1:{{ scaleAdjustment.selected.toLocaleString() }}. AutoPlan will
+            use 1:{{ scaleAdjustment.replacement.toLocaleString() }} instead.
+          </p>
+        </div>
         <div class="sm:col-span-2 lg:col-span-5">
           <label
             class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1"
@@ -783,6 +809,30 @@ const fits = (scale: number) =>
   !scaleAdvice.value || scaleAdvice.value.fits.includes(scale);
 
 const recommendedScale = computed(() => scaleAdvice.value?.recommended ?? null);
+
+/** The engine only substitutes a scale when the requested drawing would be
+ * larger than the sheet. Compare with its exact required denominator so a
+ * previously saved custom scale (for example 1:1500) is judged correctly too. */
+const scaleAdjustment = computed(() => {
+  const advice = scaleAdvice.value;
+  const selected = Number(local.embellishment.scale);
+  if (
+    props.planType === "route" ||
+    !advice?.required ||
+    !advice.recommended ||
+    !Number.isFinite(selected) ||
+    selected >= advice.required
+  ) {
+    return null;
+  }
+
+  return {
+    selected,
+    replacement: advice.recommended,
+    pageSize: advice.page_size,
+    orientation: advice.page_orientation,
+  };
+});
 
 const scaleNote = computed(() => {
   const advice = scaleAdvice.value;
