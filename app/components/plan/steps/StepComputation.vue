@@ -213,7 +213,11 @@ function formatBearing(decimalDeg: number | null | undefined) {
 
   // Format seconds with up to 6 decimal places, trim trailing zeros and optional trailing dot
   let secondsStr = secondsFloat.toFixed(6).replace(/\.?(0+)$/, "");
-  return `${sign}${deg}° ${minutes}' ${secondsStr}\"`;
+  const [secondsInt, secondsFrac] = secondsStr.split(".");
+  secondsStr = secondsFrac !== undefined
+    ? `${secondsInt.padStart(2, "0")}.${secondsFrac}`
+    : secondsInt.padStart(2, "0");
+  return `${sign}${String(deg).padStart(2, "0")}° ${String(minutes).padStart(2, "0")}' ${secondsStr}\"`;
 }
 
 function formatArea(area: number | null | undefined) {

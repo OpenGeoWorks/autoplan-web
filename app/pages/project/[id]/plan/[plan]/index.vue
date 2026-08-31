@@ -897,8 +897,15 @@ const showsCoordinatePrecision = computed(() =>
  * just a name. This renders whatever the computation actually holds, in one
  * shape the template can lay out without knowing the type.
  */
+const padDms = (n: number, width: number): string => {
+  const sign = n < 0 ? "-" : "";
+  return sign + Math.abs(n).toString().padStart(width, "0");
+};
+
 const dms = (b: any): string =>
-  b ? `${b.degrees ?? 0}° ${b.minutes ?? 0}' ${Number(b.seconds ?? 0).toFixed(2)}"` : "—";
+  b
+    ? `${padDms(b.degrees ?? 0, 2)}° ${padDms(b.minutes ?? 0, 2)}' ${Number(b.seconds ?? 0).toFixed(2).padStart(5, "0")}"`
+    : "—";
 
 const num = (v: any, d = 3): string =>
   v === null || v === undefined || v === "" || isNaN(Number(v))

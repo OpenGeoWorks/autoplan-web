@@ -589,8 +589,12 @@ function formatBearing(decimalDeg: number | null | undefined) {
     deg += 1;
   }
 
-  const secondsStr = secondsFloat.toFixed(6).replace(/\.?(0+)$/, "");
-  return `${sign}${deg}° ${minutes}' ${secondsStr}"`;
+  let secondsStr = secondsFloat.toFixed(6).replace(/\.?(0+)$/, "");
+  const [secondsInt, secondsFrac] = secondsStr.split(".");
+  secondsStr = secondsFrac !== undefined
+    ? `${secondsInt.padStart(2, "0")}.${secondsFrac}`
+    : secondsInt.padStart(2, "0");
+  return `${sign}${String(deg).padStart(2, "0")}° ${String(minutes).padStart(2, "0")}' ${secondsStr}"`;
 }
 
 function formatArea(area: number | null | undefined) {

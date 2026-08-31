@@ -278,11 +278,7 @@
                   <td
                     class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600"
                   >
-                    {{
-                      leg.back_bearing
-                        ? `${leg.back_bearing.degrees}°${leg.back_bearing.minutes}'${leg.back_bearing.seconds}"`
-                        : "-"
-                    }}
+                    {{ formatBearing(leg.back_bearing) }}
                   </td>
 
                   <!-- Bearing Correction -->
@@ -290,11 +286,7 @@
                     rowspan="3"
                     class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600"
                   >
-                    {{
-                      leg.bearing_correction
-                        ? `${leg.bearing_correction.degrees}°${leg.bearing_correction.minutes}'${leg.bearing_correction.seconds}"`
-                        : "-"
-                    }}
+                    {{ formatBearing(leg.bearing_correction) }}
                   </td>
 
                   <!-- Corrected Bearing (seconds rounded to a whole number) -->
@@ -414,11 +406,7 @@
                   <td
                     class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600"
                   >
-                    {{
-                      leg.observed_angle
-                        ? `${leg.observed_angle.degrees}°${leg.observed_angle.minutes}'${leg.observed_angle.seconds}"`
-                        : "-"
-                    }}
+                    {{ formatBearing(leg.observed_angle) }}
                   </td>
 
                   <!-- Correction dN -->
@@ -453,11 +441,7 @@
                   <td
                     class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600"
                   >
-                    {{
-                      leg.forward_bearing
-                        ? `${leg.forward_bearing.degrees}°${leg.forward_bearing.minutes}'${leg.forward_bearing.seconds}"`
-                        : `${leg.bearing.degrees}°${leg.bearing.minutes}'${leg.bearing.seconds}"`
-                    }}
+                    {{ formatBearing(leg.forward_bearing ?? leg.bearing) }}
                   </td>
 
                   <!-- Final Northing -->
@@ -549,12 +533,19 @@ function roundBearing(dms: DMS): DMS {
   return { degrees, minutes, seconds };
 }
 
+// Zero-pad a DMS component, keeping a negative sign out front rather than
+// letting padStart bury it in the middle (e.g. a bearing correction's minutes
+// or seconds can be negative even when degrees is 0).
+function padDms(n: number, width: number): string {
+  const sign = n < 0 ? "-" : "";
+  return sign + Math.abs(n).toString().padStart(width, "0");
+}
+
 // Format a bearing with its seconds rounded to a whole number.
 function formatBearing(dms: DMS | undefined | null): string {
   if (!dms) return "-";
   const r = roundBearing(dms);
-  const seconds = String(r.seconds).padStart(2, "0");
-  return `${r.degrees}°${r.minutes}'${seconds}"`;
+  return `${padDms(r.degrees, 2)}°${padDms(r.minutes, 2)}'${padDms(r.seconds, 2)}"`;
 }
 
 // Format an area in square metres, adding a hectares equivalent for large areas.
