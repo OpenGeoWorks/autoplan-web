@@ -278,10 +278,10 @@ const startInfo = computed(() => {
 
 const rows = computed(() =>
   legs.value.map((leg, i) => ({
-    distance: fmt(leg.distance),
+    distance: formatCoordinateValue(leg.distance, ""),
     bearing: formatBearing(leg.bearing),
-    deltaE: fmt(leg.delta_easting),
-    deltaN: fmt(leg.delta_northing),
+    deltaE: formatCoordinateValue(leg.delta_easting, ""),
+    deltaN: formatCoordinateValue(leg.delta_northing, ""),
     easting: leg.to.easting,
     northing: leg.to.northing,
     toStation: leg.to.id,

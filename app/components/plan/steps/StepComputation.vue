@@ -54,12 +54,12 @@
                 <td class="px-2 py-1">{{ legs[0].from.id }}</td>
               </tr>
               <tr v-for="(leg, i) in legs" :key="i" class="border-t">
-                <td class="px-2 py-1">{{ leg.distance }}</td>
+                <td class="px-2 py-1">{{ formatCoordinateValue(leg.distance) }}</td>
                 <td class="px-2 py-1">
                   {{ formatBearing(leg.bearing?.decimal) }}
                 </td>
-                <td class="px-2 py-1">{{ leg.delta_easting }}</td>
-                <td class="px-2 py-1">{{ leg.delta_northing }}</td>
+                <td class="px-2 py-1">{{ formatCoordinateValue(leg.delta_easting) }}</td>
+                <td class="px-2 py-1">{{ formatCoordinateValue(leg.delta_northing) }}</td>
                 <td class="px-2 py-1">{{ formatCoordinateValue(leg.to.easting) }}</td>
                 <td class="px-2 py-1">{{ formatCoordinateValue(leg.to.northing) }}</td>
                 <td class="px-2 py-1">{{ leg.to.id }}</td>
@@ -69,7 +69,7 @@
         </div>
         <div class="mt-3">
           <div>
-            <strong>Total distance:</strong> {{ traverse.total_distance }} m
+            <strong>Total distance:</strong> {{ formatCoordinateValue(traverse.total_distance) }} m
           </div>
           <div v-if="traverse.area && !isRouteType" class="mt-1">
             <strong>Area:</strong> {{ formatArea(traverse.area) }}

@@ -310,7 +310,7 @@
                     rowspan="3"
                     class="px-2 py-2 text-center border-r border-gray-200 dark:border-slate-600"
                   >
-                    {{ safeFixed(leg.distance, 3) }}
+                    {{ formatCoordinateValue(leg.distance) }}
                   </td>
 
                   <!-- Length x Cos Brg (N) -->
@@ -320,7 +320,7 @@
                   >
                     {{
                       leg.delta_northing > 0
-                        ? safeFixed(leg.delta_northing, 3)
+                        ? formatCoordinateValue(leg.delta_northing, "")
                         : ""
                     }}
                   </td>
@@ -332,7 +332,7 @@
                   >
                     {{
                       leg.delta_northing < 0
-                        ? safeFixed(Math.abs(leg.delta_northing), 3)
+                        ? formatCoordinateValue(Math.abs(leg.delta_northing), "")
                         : ""
                     }}
                   </td>
@@ -356,7 +356,7 @@
                   >
                     {{
                       leg.delta_easting > 0
-                        ? safeFixed(leg.delta_easting, 3)
+                        ? formatCoordinateValue(leg.delta_easting, "")
                         : ""
                     }}
                   </td>
@@ -368,7 +368,7 @@
                   >
                     {{
                       leg.delta_easting < 0
-                        ? safeFixed(Math.abs(leg.delta_easting), 3)
+                        ? formatCoordinateValue(Math.abs(leg.delta_easting), "")
                         : ""
                     }}
                   </td>
