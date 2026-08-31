@@ -1314,7 +1314,11 @@ function drawDimensionLayers() {
     let angleDeg = (angleRad * 180) / Math.PI;
     if (!Number.isFinite(angleDeg)) angleDeg = 0;
     let uprightAngle = ((angleDeg % 360) + 360) % 360;
-    if (uprightAngle > 90 && uprightAngle < 270) {
+    // Right-to-left legs have their label flipped 180° to stay readable. The
+    // degree and minute halves sit at fixed fractions along the leg, so the
+    // flip reverses which one reads first unless they swap ends with it.
+    const bearingFlipped = uprightAngle > 90 && uprightAngle < 270;
+    if (bearingFlipped) {
       uprightAngle = (uprightAngle + 180) % 360;
     }
 
@@ -1375,8 +1379,10 @@ function drawDimensionLayers() {
       dimensionLayerGroup.addLayer(marker);
     };
 
-    if (dim.degreeText) placeBearingLabel(dim.degreeText, 0.2);
-    if (dim.minuteText) placeBearingLabel(dim.minuteText, 0.8);
+    if (dim.degreeText)
+      placeBearingLabel(dim.degreeText, bearingFlipped ? 0.8 : 0.2);
+    if (dim.minuteText)
+      placeBearingLabel(dim.minuteText, bearingFlipped ? 0.2 : 0.8);
   }
 
   dimensionLayerGroup.bringToFront();
